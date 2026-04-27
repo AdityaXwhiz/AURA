@@ -105,7 +105,7 @@ const ProtocolPage = () => {
         console.log("⚡ Calling AI for plan...");
         console.log("🔥 CALLING AI NOW");
 
-        const res = await fetch("http://localhost:5000/api/ai/plan", {
+        const res = await fetch("https://aura-backend-nxps.onrender.com/api/ai/plan", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

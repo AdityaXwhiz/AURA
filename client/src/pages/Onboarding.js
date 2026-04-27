@@ -131,7 +131,7 @@ const initiateBiometricScan = async () => {
 
     const token = localStorage.getItem("token");
 
-    const res = await fetch("http://localhost:5000/api/user/onboarding", {
+    const res = await fetch("https://aura-backend-nxps.onrender.com/api/user/onboarding", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

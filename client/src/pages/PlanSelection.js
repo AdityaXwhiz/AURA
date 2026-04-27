@@ -95,7 +95,7 @@ const PlanSelection = () => {
       try {
         const token = localStorage.getItem("token");
 
-        const res = await fetch("http://localhost:5000/api/user/profile", {
+        const res = await fetch("https://aura-backend-nxps.onrender.com/api/user/profile", {
           headers: {
             Authorization: `Bearer ${token}`,
           },

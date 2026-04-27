@@ -906,7 +906,7 @@ const Profile = () => {
     const fetchSteps = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:5000/api/fitness", {
+        const res = await fetch("https://aura-backend-nxps.onrender.com/api/fitness", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -938,7 +938,7 @@ const Profile = () => {
     onSuccess: async (tokenResponse) => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:5000/api/fitness", {
+        const res = await fetch("https://aura-backend-nxps.onrender.com/api/fitness", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

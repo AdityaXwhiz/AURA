@@ -17,8 +17,8 @@ function LoginModal({ close }) {
     try {
       const url =
         mode === "signup"
-          ? "http://localhost:5000/api/auth/signup"
-          : "http://localhost:5000/api/auth/login";
+          ? "https://aura-backend-nxps.onrender.com/api/auth/signup"
+          : "https://aura-backend-nxps.onrender.com/api/auth/login";
 
       const body =
         mode === "signup"

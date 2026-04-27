@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { getUserRank, getNextRank, getSubTierProgress } from "../utils/rank";
 
-const API = "http://localhost:5000";
+const API = "https://aura-backend-nxps.onrender.com";
 const PROGRESS_KEY = "auraDailyGoalsProgress";
 const CAL_PER_STEP = 0.04;
 const EST_MEAL_CAL = { Breakfast: 400, Lunch: 550, Dinner: 500, Snacks: 200 };

@@ -269,7 +269,7 @@ const RankPage = () => {
       if (!userId) { setLoading(false); return; }
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`http://localhost:5000/api/user/rank`, {
+        const res = await fetch(`https://aura-backend-nxps.onrender.com/api/user/rank`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -303,7 +303,7 @@ const RankPage = () => {
     const plan = profile.selectedPlan || "aesthetic";
     try {
       const token = localStorage.getItem("token");
-      await fetch("http://localhost:5000/api/ai/plan", {
+      await fetch("https://aura-backend-nxps.onrender.com/api/ai/plan", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

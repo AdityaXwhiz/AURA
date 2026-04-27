@@ -646,7 +646,7 @@ const DailyGoals = () => {
         let savedData = null;
 
         if (type) {
-          const aiRes = await fetch("http://localhost:5000/api/ai/plan", {
+          const aiRes = await fetch("https://aura-backend-nxps.onrender.com/api/ai/plan", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -667,7 +667,7 @@ const DailyGoals = () => {
           plan = aiData?.plan || null;
         }
 
-        const profileRes = await fetch(`http://localhost:5000/api/user/rank`, {
+        const profileRes = await fetch(`https://aura-backend-nxps.onrender.com/api/user/rank`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -720,7 +720,7 @@ const DailyGoals = () => {
         }
 
         if (!plan) {
-          const savedRes = await fetch(`http://localhost:5000/api/user/profile`, {
+          const savedRes = await fetch(`https://aura-backend-nxps.onrender.com/api/user/profile`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -793,7 +793,7 @@ const DailyGoals = () => {
     const token = localStorage.getItem("token");
 
     try {
-      await fetch("http://localhost:5000/api/user/reset-day", {
+      await fetch("https://aura-backend-nxps.onrender.com/api/user/reset-day", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -867,7 +867,7 @@ const DailyGoals = () => {
 
       try {
         const selectedPlan = type || user?.selectedPlan || "aesthetic";
-        const res = await fetch("http://localhost:5000/api/user/task-complete", {
+        const res = await fetch("https://aura-backend-nxps.onrender.com/api/user/task-complete", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
