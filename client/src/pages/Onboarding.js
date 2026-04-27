@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { 
-  Send, Terminal, Activity, Target, Loader2, Flame, 
-  BrainCircuit, Timer, Users, Trophy, Dumbbell, Atom, 
-  Award, Fingerprint, HeartPulse, Coffee, ShieldCheck, Cpu
+  Send, Terminal, Activity, Loader2, Flame, 
+  BrainCircuit, Dumbbell, Atom, Fingerprint, 
+  HeartPulse, Coffee, ShieldCheck
 } from "lucide-react";
 
-// 1. SUB-COMPONENT: Reactive Neural Feed (Bottom Left)
+// SUB-COMPONENT: Reactive Neural Feed (Bottom Left)
 const NeuralLogicFeed = ({ report }) => {
   const [displayed, setDisplayed] = useState("");
   useEffect(() => {
@@ -35,14 +35,14 @@ const NeuralLogicFeed = ({ report }) => {
   );
 };
 
-// 2. HUD COMPONENT: BMI Analytics (Right Mid)
+// HUD COMPONENT: BMI Analytics (Right Mid)
 const BMIProfileHUD = ({ data }) => {
   const heightM = data.height ? parseFloat(data.height) / 100 : 0;
   const bmi = (data.weight && heightM) ? (parseFloat(data.weight) / (heightM * heightM)).toFixed(1) : "0.0";
   const getBMIScore = () => {
     if (bmi === "0.0") return 0;
     const b = parseFloat(bmi);
-    return (b >= 18.5 && b <= 24.9) ? 100 : 75; // Grounded in 96kg starting weight
+    return (b >= 18.5 && b <= 24.9) ? 100 : 75;
   };
 
   return (
@@ -53,8 +53,8 @@ const BMIProfileHUD = ({ data }) => {
           <Fingerprint size={12} /> Live_Profile_Data
         </h3>
         <div className="space-y-6 font-mono text-[10px] uppercase tracking-widest mb-10 text-white">
-          <div className="border-b border-red-900/10 pb-2"><span className="text-zinc-600 block mb-1">Subject</span><span className="text-xs">{data.name || "Aditya Singh"}</span></div>
-          <div className="border-b border-red-900/10 pb-2"><span className="text-zinc-600 block mb-1">Goal_Target</span><span className="text-xs">85.0 kg</span></div>
+          <div className="border-b border-red-900/10 pb-2"><span className="text-zinc-600 block mb-1">Subject</span><span className="text-xs">{data.name || "Awaiting..."}</span></div>
+          <div className="border-b border-red-900/10 pb-2"><span className="text-zinc-600 block mb-1">Target</span><span className="text-xs">85.0 kg</span></div>
           <div className="border-b border-red-900/10 pb-2"><span className="text-zinc-600 block mb-1">Current_BMI</span><span className="text-xs">{bmi}</span></div>
         </div>
         <div className="text-[10px] font-bold text-red-600 mb-2 uppercase">Metabolic_Score: {getBMIScore()}%</div>
@@ -64,7 +64,6 @@ const BMIProfileHUD = ({ data }) => {
   );
 };
 
-// 3. SUB-COMPONENT: Refined Background
 const SaturatedBackground = () => (
   <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,_rgba(69,10,10,0.1)_0%,_rgba(0,0,0,1)_90%)]">
     <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
@@ -83,8 +82,7 @@ const Onboarding = () => {
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [showPlan, setShowPlan] = useState(false);
-  const [userData, setUserData] = useState({ name: "Aditya Singh", weight: 90, age: 21 }); //
+  const [userData, setUserData] = useState({ name: "", weight: "", age: "" });
   const [psychReport, setPsychReport] = useState("");
   const [currentSection, setCurrentSection] = useState("");
   const chatEndRef = useRef(null);
@@ -98,7 +96,7 @@ const Onboarding = () => {
     { id: "goal", q: "SELECT PRIMARY PERFORMANCE OBJECTIVE:", type: "buttons", options: ["Fat Loss", "Muscle Gain", "Strength", "Athlete Mode"], section: "SECTION B: PSYCHOLOGICAL MAP" },
     { id: "experience", q: "QUANTIFY FITNESS EXPERIENCE:", type: "buttons", options: ["Beginner", "Intermediate", "Advanced"], section: "SECTION B: PSYCHOLOGICAL MAP" },
     { id: "diet", q: "PRIMARY FUEL SOURCE:", type: "buttons", options: ["Veg", "Non-Veg", "Vegan", "Eggetarian"], section: "SECTION B: PSYCHOLOGICAL MAP" },
-    { id: "target_weight", q: "DEFINE TARGET BODY MASS (KG):", type: "text", section: "SECTION B: PSYCHOLOGICAL MAP" }, // User goal is 85kg
+    { id: "target_weight", q: "DEFINE TARGET BODY MASS (KG):", type: "text", section: "SECTION B: PSYCHOLOGICAL MAP" },
     { id: "commitment", q: "WEEKLY TRAINING FREQUENCY?", type: "buttons", options: ["2-3 Days", "4-5 Days", "6 Days"], section: "SECTION B: PSYCHOLOGICAL MAP" },
     { id: "daily_role", q: "WHAT DEFINES YOUR DAILY LIFE?", type: "buttons", options: ["College Student", "Professional", "Home", "Athlete"], section: "SECTION C: LIFE INTEGRATION" },
     { id: "train_time", q: "WHEN CAN YOU TRAIN WITHOUT EXCUSES?", type: "buttons", options: ["Morning", "Evening", "Night", "Flexible"], section: "SECTION C: LIFE INTEGRATION" },
@@ -114,24 +112,64 @@ const Onboarding = () => {
       const timer = setTimeout(() => {
         setMessages(prev => [...prev, { sender: "ai", text: chatFlow[step].q }]);
         setIsTyping(false);
-      }, 900);
+      }, 800);
       return () => clearTimeout(timer);
     } else {
       initiateBiometricScan();
     }
   }, [step, chatFlow]);
+const initiateBiometricScan = async () => {
+  setIsScanning(true);
 
-  const initiateBiometricScan = () => {
-    setIsScanning(true);
-    setTimeout(() => { setIsScanning(false); setShowPlan(true); }, 4000);
-  };
+  try {
+    const storedUser = JSON.parse(localStorage.getItem("auraUser"));
+
+    if (!storedUser) {
+      alert("No logged in user found");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    const res = await fetch("http://localhost:5000/api/user/onboarding", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        onboarding: userData
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.log(data);
+      alert("Failed to save onboarding");
+      setIsScanning(false);
+      return;
+    }
+
+    setTimeout(() => {
+      setIsScanning(false);
+      navigate('/planselection');
+    }, 2000);
+
+  } catch (err) {
+    console.log(err);
+    alert("Failed to save onboarding");
+  }
+};
 
   const handleUserAnswer = (answer) => {
-    if (!answer.trim()) return;
+    if (!answer.toString().trim()) return;
     setMessages(prev => [...prev, { sender: "user", text: answer }]);
     setUserData(prev => ({ ...prev, [chatFlow[step].id]: answer }));
-    if (chatFlow[step].id === "weight") setPsychReport(`Analyzing mass density for ${answer}kg profile. Target: 85kg transition.`);
-    if (chatFlow[step].id === "daily_role") setPsychReport(`Student context recognized. Recalculating sedentary energy expenditure.`);
+    
+    if (chatFlow[step].id === "name") setPsychReport(`Neural link established for subject: ${answer}.`);
+    if (chatFlow[step].id === "goal") setPsychReport(`Objective set to ${answer}. Calculating optimal path...`);
+    
     setInputValue("");
     setStep(prev => prev + 1);
   };
@@ -153,13 +191,86 @@ const Onboarding = () => {
         
         {isScanning ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center">
-             <div className="relative mb-12">
-                <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }} className="w-48 h-48 border-t-2 border-red-600 rounded-full" />
-                <div className="absolute inset-0 flex items-center justify-center"><Fingerprint size={60} className="text-red-600 animate-pulse" /></div>
+             <div className="relative mb-12 flex items-center justify-center">
+                
+                {/* 1. Animated HUD Circle */}
+                <motion.div 
+                    animate={{ rotate: 360, scale: [1, 1.05, 1] }} 
+                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }} 
+                    className="w-72 h-72 border border-red-600/20 rounded-full absolute"
+                />
+                <motion.div 
+                    animate={{ rotate: -360 }} 
+                    transition={{ duration: 8, repeat: Infinity, ease: "linear" }} 
+                    className="w-80 h-80 border-t border-b border-red-600/10 rounded-full absolute"
+                />
+
+                {/* 2. Neural Fingerprint Completion */}
+                <div className="relative z-10">
+                    <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-900">
+                        <path d="M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10" opacity="0.1"/>
+                        <path d="M5 15c0-3.866 3.134-7 7-7s7 3.134 7 7" opacity="0.1"/>
+                        <path d="M8 18c0-2.209 1.791-4 4-4s4 1.791 4 4" opacity="0.1"/>
+                        <path d="M12 12v.01" opacity="0.1"/>
+                    </svg>
+
+                    <motion.svg 
+                        width="120" 
+                        height="120" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="#dc2626" 
+                        strokeWidth="1" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        className="absolute top-0 left-0 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)]"
+                    >
+                        {/* Fingerprint ridges animating to completion */}
+                        <motion.path 
+                            d="M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10" 
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 2, delay: 0.5 }}
+                        />
+                        <motion.path 
+                            d="M5 15c0-3.866 3.134-7 7-7s7 3.134 7 7" 
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 2, delay: 1.5 }}
+                        />
+                        <motion.path 
+                            d="M8 18c0-2.209 1.791-4 4-4s4 1.791 4 4" 
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 2, delay: 2.5 }}
+                        />
+                        <motion.path 
+                            d="M12 12v.01" 
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 1, delay: 4 }}
+                        />
+                    </motion.svg>
+                </div>
+
+                {/* 3. Circular Scanner Scanning line */}
+                <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    className="absolute w-72 h-72 border-l-2 border-red-600 rounded-full z-20"
+                />
              </div>
-             <motion.h3 animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.5, repeat: Infinity }} className="text-4xl font-black text-white italic uppercase" style={{ fontFamily: 'Oswald' }}>Neural Scan In Progress...</motion.h3>
+             
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }} className="space-y-3">
+                <h3 className="text-3xl font-black text-white italic uppercase tracking-[0.3em]">Neural Sync</h3>
+                <div className="flex items-center justify-center gap-3">
+                    <div className="h-[1px] w-12 bg-red-900/50" />
+                    <p className="text-red-600 font-mono text-[9px] tracking-[0.5em] uppercase animate-pulse">Establishing Biometric Protocol</p>
+                    <div className="h-[1px] w-12 bg-red-900/50" />
+                </div>
+             </motion.div>
           </div>
-        ) : !showPlan ? (
+        ) : (
           <>
             <AnimatePresence mode="wait">
               <motion.div key={currentSection} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="w-full mb-12">
@@ -171,7 +282,7 @@ const Onboarding = () => {
             <div className="flex-1 overflow-y-auto space-y-12 pr-2 custom-scrollbar pb-32">
               {messages.map((msg, i) => (
                 <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex ${msg.sender === 'ai' ? 'justify-start' : 'justify-end'}`}>
-                  <div className={`p-8 shadow-2xl ${msg.sender === 'ai' ? 'bg-red-950/20 border-l-8 border-red-600 clip-ai text-white uppercase font-black tracking-tighter font-sans' : 'bg-zinc-900 border-r-8 border-red-600 clip-user text-white italic font-serif'}`}>
+                  <div className={`p-8 shadow-2xl ${msg.sender === 'ai' ? 'bg-red-950/20 border-l-8 border-red-600 clip-ai text-white uppercase font-black tracking-tighter' : 'bg-zinc-900 border-r-8 border-red-600 clip-user text-white italic font-serif'}`}>
                      {msg.text}
                   </div>
                 </motion.div>
@@ -192,37 +303,6 @@ const Onboarding = () => {
               </div>
             </div>
           </>
-        ) : (
-          /* FINAL MASTER PROTOCOL REVEAL */
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex-1 py-10">
-             <div className="text-center mb-16">
-                <motion.h2 animate={{ textShadow: ["0 0 10px #dc2626", "0 0 40px #dc2626", "0 0 10px #dc2626"] }} transition={{ duration: 2, repeat: Infinity }} className="text-7xl md:text-[9rem] font-black text-white italic uppercase tracking-tighter leading-none mb-4" style={{ fontFamily: 'Oswald' }}>THE <span className="text-red-700">WARRIOR.</span></motion.h2>
-                <p className="text-[10px] text-red-600 font-bold uppercase tracking-[0.6em]">Biometric Protocol for {userData.name}</p>
-             </div>
-             
-             <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-                <div className="p-10 bg-zinc-950/60 border-l-4 border-red-600 shadow-2xl space-y-8">
-                   <div className="flex items-center gap-4 text-white"><Activity className="text-red-600" /> <h4 className="font-black italic uppercase tracking-widest">METABOLIC_GOAL</h4></div>
-                   <div className="space-y-4">
-                      <div className="flex justify-between border-b border-zinc-900 pb-2 text-[10px] uppercase font-bold text-zinc-500"><span>Target_Mass</span><span className="text-red-600">85.0 kg</span></div>
-                      <div className="flex justify-between border-b border-zinc-900 pb-2 text-[10px] uppercase font-bold text-zinc-500"><span>Daily_Intake</span><span className="text-white">2,480 kcal</span></div>
-                      <div className="flex justify-between border-b border-zinc-900 pb-2 text-[10px] uppercase font-bold text-zinc-500"><span>Protein_Synthesis</span><span className="text-white">180g</span></div>
-                   </div>
-                </div>
-                <div className="p-10 bg-zinc-950/60 border-l-4 border-red-600 shadow-2xl space-y-8">
-                   <div className="flex items-center gap-4 text-white"><Flame className="text-red-600" /> <h4 className="font-black italic uppercase tracking-widest">TRAINING_INTENSITY</h4></div>
-                   <div className="space-y-4">
-                      <div className="flex justify-between border-b border-zinc-900 pb-2 text-[10px] uppercase font-bold text-zinc-500"><span>Frequency</span><span className="text-white">{userData.commitment || "5-6 Days"}</span></div>
-                      <div className="flex justify-between border-b border-zinc-900 pb-2 text-[10px] uppercase font-bold text-zinc-500"><span>Focus</span><span className="text-white">Compound Lifts</span></div>
-                      <div className="flex justify-between border-b border-zinc-900 pb-2 text-[10px] uppercase font-bold text-zinc-500"><span>Velocity</span><span className="text-red-600">Max Intensity</span></div>
-                   </div>
-                </div>
-             </div>
-             <div className="mt-16 text-center">
-                <p className="text-[10px] text-zinc-600 italic mb-10 max-w-sm mx-auto">“Initialization complete. The hardest part is starting — your evolution begins now. Let the war begin.”</p>
-                <button onClick={() => navigate('/planner')} className="px-24 py-8 bg-red-600 text-black font-black text-2xl uppercase italic shadow-2xl hover:bg-white transition-all">Activate War Room</button>
-             </div>
-          </motion.div>
         )}
       </div>
       <style>{`

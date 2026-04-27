@@ -1,97 +1,77 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+console.log("GEMINI KEY:", process.env.GEMINI_API_KEY);
 
-// MongoDB connection
+// MongoDB
 const mongoose = require("mongoose");
 
 const app = express();
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 
-// 🔥 CONNECT MONGODB
+/* ===============================
+   🔥 CONNECT MONGODB
+================================ */
 mongoose.connect(process.env.MONGO_URI)
 .then(()=> console.log("MongoDB Connected 🔥"))
 .catch(err => console.log("Mongo error:", err.message));
 
-// 👤 USER SCHEMA
-const userSchema = new mongoose.Schema({
-  name: String,
-  age: Number,
-  weight: Number,
-  height: Number,
-  goal: String,
-  diet: String,
-  experience: String,
-  createdAt: { type: Date, default: Date.now }
-});
-
-const User = mongoose.model("User", userSchema);
-
-// ROOT
+/* ===============================
+   ROOT TEST
+================================ */
 app.get("/", (req, res) => {
   res.send("AURA backend running 🚀");
 });
 
-// 💾 SAVE USER DATA
-app.post("/api/user/save", async (req,res)=>{
-  try{
-    const user = new User(req.body);
-    await user.save();
-    console.log("User saved:", user.name);
-    res.json({msg:"User saved"});
-  }catch(err){
-    res.status(500).json(err);
-  }
-});
+/* ===============================
+   🔐 AUTH ROUTES
+================================ */
+const authRoutes = require("./routes/authRoutes");
+app.use("/api/auth", authRoutes);
 
-// 🤖 GEMINI AI PLAN ROUTE
-// 🤖 GEMINI AI PLAN ROUTE (LATEST WORKING)
-const axios = require("axios");
+/* ===============================
+   🤖 AI ROUTES (NEW CLEAN SYSTEM)
+================================ */
+const aiRoutes = require("./routes/aiRoutes");
+app.use("/api/ai", aiRoutes);
 
-app.post("/api/ai/plan", async (req,res)=>{
-  try{
-    const { name, goal, weight, age } = req.body;
+/* ===============================
+   👤 USER DATA ROUTES
+================================ */
+const userRoutes = require("./routes/userRoutes");
+app.use("/api/user", userRoutes);
 
-    const prompt = `
-You are Aura AI fitness coach.
-Create aggressive Indian gym + diet plan.
+/* ===============================
+   🏃 FITNESS ROUTES
+================================ */
+const fitnessRoutes = require("./routes/fitness");
+app.use("/api/fitness", fitnessRoutes);
 
-Name: ${name}
-Age: ${age}
-Weight: ${weight}
-Goal: ${goal}
+/* ===============================
+   📊 ACTIVITY ROUTES
+================================ */
+const activityRoutes = require("./routes/activity");
+app.use("/api/activity", activityRoutes);
 
-Give:
-- Daily workout
-- Indian diet plan
-- Motivation
-`;
-
-    const response = await axios.post(
-`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-{
-  contents: [
-    {
-      parts: [{ text: prompt }]
-    }
-  ]
-}
-);
-
-    const text =
-      response.data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "No plan generated";
-
-    console.log("AI generated plan ✅");
-    res.json({ plan: text });
-
-  }catch(err){
-    console.log("Gemini error:", err.response?.data || err.message);
-    res.status(500).json({error:"Gemini failed"});
-  }
-});
-
-// START SERVER
+/* ===============================
+   START SERVER
+================================ */
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, ()=> console.log("Server running on port", PORT));

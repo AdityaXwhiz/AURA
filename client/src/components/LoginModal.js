@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom"; // Import for navigation
 import { X, ShieldCheck, Terminal, Zap } from "lucide-react";
@@ -6,11 +6,54 @@ import { X, ShieldCheck, Terminal, Zap } from "lucide-react";
 function LoginModal({ close }) {
   const navigate = useNavigate(); // Initialize navigation
 
-  const handleInitiateLink = (e) => {
+  const [mode, setMode] = useState("login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleInitiateLink = async (e) => {
     e.preventDefault();
-    // Here you would typically add authentication logic
-    // For now, we transition directly to the onboarding sequence
-    navigate("/onboarding"); 
+
+    try {
+      const url =
+        mode === "signup"
+          ? "http://localhost:5000/api/auth/signup"
+          : "http://localhost:5000/api/auth/login";
+
+      const body =
+        mode === "signup"
+          ? { name, email, password }
+          : { email, password };
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Auth failed");
+        return;
+      }
+
+      // store auth properly
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+      }
+
+      if (data.user) {
+        localStorage.setItem("auraUser", JSON.stringify(data.user));
+      }
+
+      // redirect after login/signup
+      navigate("/onboarding");
+
+    } catch (err) {
+      console.log(err);
+      alert("Server error");
+    }
   };
 
   return (
@@ -52,7 +95,41 @@ function LoginModal({ close }) {
           <div className="h-[1px] w-12 bg-red-600 mt-4 shadow-[0_0_10px_#dc2626]" />
         </div>
 
+        <div className="flex gap-6 mb-6 text-xs uppercase">
+          <button
+            type="button"
+            onClick={()=>setMode("login")}
+            className={`${mode==="login"?"text-red-600":"text-zinc-500"}`}
+          >
+            Login
+          </button>
+
+          <button
+            type="button"
+            onClick={()=>setMode("signup")}
+            className={`${mode==="signup"?"text-red-600":"text-zinc-500"}`}
+          >
+            Signup
+          </button>
+        </div>
+
         <form className="space-y-6 relative z-10" onSubmit={handleInitiateLink}>
+          {mode === "signup" && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em]">
+                Name
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e)=>setName(e.target.value)}
+                placeholder="Enter your name"
+                className="w-full p-4 bg-black border border-red-900/20 text-white"
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-2">
               <Terminal size={12} className="text-red-900" /> Identity_Link
@@ -60,8 +137,10 @@ function LoginModal({ close }) {
             <input
               type="email"
               required
-              placeholder="s24cseu1228@bennett.edu.in" // Using your college email
-              className="w-full p-4 bg-black border border-red-900/20 text-white rounded-none focus:border-red-600 focus:outline-none focus:shadow-[0_0_20px_rgba(220,38,38,0.1)] transition-all duration-300 placeholder:text-zinc-800 text-sm font-mono"
+              value={email}
+              onChange={(e)=>setEmail(e.target.value)}
+              placeholder="Enter email"
+              className="w-full p-4 bg-black border border-red-900/20 text-white rounded-none focus:border-red-600 focus:outline-none"
             />
           </div>
 
@@ -72,8 +151,10 @@ function LoginModal({ close }) {
             <input
               type="password"
               required
-              placeholder="••••••••"
-              className="w-full p-4 bg-black border border-red-900/20 text-white rounded-none focus:border-red-600 focus:outline-none focus:shadow-[0_0_20px_rgba(220,38,38,0.1)] transition-all duration-300 placeholder:text-zinc-800 text-sm font-mono"
+              value={password}
+              onChange={(e)=>setPassword(e.target.value)}
+              placeholder="Password"
+              className="w-full p-4 bg-black border border-red-900/20 text-white rounded-none focus:border-red-600 focus:outline-none"
             />
           </div>
 

@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, useScroll, useSpring, useTransform, AnimatePresence } from "framer-motion";
 import Lenis from "@studio-freight/lenis";
 import { 
   Dumbbell, BrainCircuit, HeartPulse, Zap, Trophy, Target, 
-  Rocket, ShieldCheck, Activity, Flame, Users, Timer, Terminal, Briefcase, BarChart3, Mail, Info, Crown
+  Rocket, ShieldCheck, Activity, Flame, Users, Timer, Terminal, Briefcase, BarChart3, Crown
 } from "lucide-react";
 import LoginModal from "../components/LoginModal";
+import useAuth from "../hooks/useAuth";
+import { getNextRank, getUserRank, getRankDisplay, getSubTierProgress } from "../utils/rank";
 
 // 1. SUB-COMPONENT: Intelligence Feed
 const TypewriterFeed = ({ progress }) => {
   const [text, setText] = useState("");
   const [index, setIndex] = useState(0);
   const messages = useMemo(() => [
-    "INITIALIZING NEURAL LINK...", "SCANNING BIOMETRICS...", "OPTIMIZING PROTOCOLS...", "SYSTEM STATUS: PEAK."
+    "INITIALIZING NEURAL LINK...", "SCANNING BIOMETRICS...", "OPTIMIZING SYSTEMS...", "SYSTEM STATUS: PEAK."
   ], []);
   const activeIndex = useTransform(progress, [0, 0.5, 1], [0, 1, 2]);
   
@@ -124,8 +127,17 @@ const NeuralNode = ({ step, align }) => (
 
 const Landing = () => {
   const [showLogin, setShowLogin] = useState(false);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [rankProfile, setRankProfile] = useState({
+    points: user?.points || 0,
+    rank: user?.rank || getUserRank(user?.points || 0),
+    nextRank: user?.nextRank || getNextRank(user?.points || 0),
+    selectedPlan: user?.selectedPlan || "aesthetic",
+  });
   const { scrollYProgress } = useScroll();
+  const userId = user?._id || user?.id;
 
   useEffect(() => {
     // RESOLVED SCROLLING LAG: HIGH-PERFORMANCE LENIS SETUP
@@ -154,6 +166,67 @@ const Landing = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const loadRankProfile = async () => {
+      if (!userId) return;
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`http://localhost:5000/api/user/rank`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await res.json();
+        if (!res.ok) return;
+        setRankProfile({
+          points: data?.points || 0,
+          rank: data?.rank || getUserRank(data?.points || 0),
+          nextRank: data?.nextRank || getNextRank(data?.points || 0),
+          selectedPlan: data?.user?.selectedPlan || "aesthetic",
+        });
+      } catch (_error) {
+        // Keep UI from local data if network fails.
+      }
+    };
+
+    loadRankProfile();
+  }, [userId]);
+
+  const progressPercent = getSubTierProgress(rankProfile.points);
+
+  const generateNewPlan = async () => {
+    if (!userId) {
+      setShowLogin(true);
+      return;
+    }
+
+    const selectedPlan = rankProfile.selectedPlan || "aesthetic";
+    const payload = {
+      selectedPlan,
+      user: {
+        name: user?.name || "Athlete",
+        weight: user?.onboarding?.weight,
+        goal: user?.onboarding?.goal,
+        target_weight: user?.onboarding?.target_weight,
+      },
+    };
+
+    try {
+      const token = localStorage.getItem("token");
+      await fetch("http://localhost:5000/api/ai/plan", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      navigate(`/dailygoals/${selectedPlan}`);
+    } catch (_error) {
+      navigate(`/dailygoals/${selectedPlan}`);
+    }
+  };
+
   return (
     <div className="bg-black text-zinc-400 font-sans selection:bg-red-600 overflow-x-hidden min-h-screen relative tracking-tight">
       <AnimatePresence>{loading && <LoadingScreen key="loader" />}</AnimatePresence>
@@ -163,21 +236,138 @@ const Landing = () => {
       <div className="fixed bottom-8 left-8 z-[120] bg-black/60 backdrop-blur-xl border-l-2 border-red-600 p-4 hidden md:block"><TypewriterFeed progress={scrollYProgress} /></div>
 
       {/* NAVBAR (Matched Color & Refined Design) */}
-      <nav className="fixed w-full z-[110] flex justify-between items-center px-12 py-5 bg-black/40 backdrop-blur-3xl border-b border-red-900/10">
-        <div className="flex items-center gap-4">
-           <h1 className="text-4xl font-bold italic text-red-600 tracking-tight select-none drop-shadow-[0_0_2px_rgba(220,38,38,0.2)]" style={{ fontFamily: "'Dancing Script', cursive" }}>
-             Aura
-           </h1>
-           <div className="h-5 w-[1px] bg-red-950 mx-2 hidden md:block" />
-        </div>
-        <button onClick={() => setShowLogin(true)} className="px-10 py-2.5 bg-red-600 text-black font-black text-[10px] tracking-[0.3em] uppercase shadow-[0_0_25px_rgba(220,38,38,0.3)] hover:bg-red-700 transition-all">LINK_START</button>
-      </nav>
+     {/* NAVBAR (High-Performance Navigation) */}
+<nav className="fixed w-full z-[140] flex justify-between items-center px-12 py-6 bg-black/40 backdrop-blur-3xl border-b border-red-900/10">
+  <div className="flex items-center gap-4">
+    <h1 
+      className="text-4xl font-bold italic text-red-600 tracking-tight select-none drop-shadow-[0_0_2px_rgba(220,38,38,0.2)] cursor-pointer" 
+      style={{ fontFamily: "'Dancing Script', cursive" }}
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+    >
+      Aura
+    </h1>
+    <div className="h-6 w-[1px] bg-red-950 mx-4 hidden md:block" />
+    
+    {/* Logged-in Quick Access Links */}
+    {user && (
+      <div className="hidden lg:flex items-center gap-8 font-mono text-[9px] uppercase tracking-[0.3em] text-zinc-500">
+        <button 
+          onClick={() => navigate('/dailygoals')} 
+          className="hover:text-red-600 transition-colors flex items-center gap-2 group"
+        >
+          <Activity size={12} className="group-hover:scale-110 transition-transform" /> Daily_Objectives
+        </button>
+        <button 
+          onClick={() => navigate('/rank')} 
+          className="hover:text-red-600 transition-colors flex items-center gap-2 group"
+        >
+          <Crown size={12} className="group-hover:animate-pulse" /> Rank_Center
+        </button>
+        <button 
+          onClick={() => navigate('/activity')} 
+          className="hover:text-red-600 transition-colors flex items-center gap-2 group"
+        >
+          <Activity size={12} className="group-hover:scale-110 transition-transform" /> Activity
+        </button>
+      </div>
+    )}
+  </div>
 
+  <div className="flex items-center gap-6">
+    {user ? (
+      <div className="flex items-center gap-6">
+        {/* Subject Profile Trigger */}
+        <button 
+          onClick={() => navigate('/profile')}
+          className="flex items-center gap-3 group px-4 py-2 border border-red-900/20 bg-zinc-950/50 hover:border-red-600 transition-all"
+        >
+          <div className="w-8 h-8 bg-red-600 rounded-sm flex items-center justify-center text-black shadow-[0_0_10px_rgba(220,38,38,0.3)]">
+            <Users size={16} />
+          </div>
+          <div className="text-left hidden sm:block">
+            <p className="text-[8px] text-zinc-600 font-bold uppercase leading-none mb-1">{getRankDisplay(rankProfile.points)}</p>
+              <p className="text-[10px] text-white font-black uppercase tracking-widest leading-none flex items-center gap-1.5" style={{ fontFamily: 'Oswald' }}>
+                <Crown size={10} className="text-red-500 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)]" />
+                {user.name}
+            </p>
+          </div>
+        </button>
+
+        {/* Global Exit */}
+        <button
+          onClick={logout}
+          className="p-2 text-zinc-600 hover:text-red-600 transition-colors"
+          title="Terminate_Session"
+        >
+          <Zap size={18} />
+        </button>
+      </div>
+    ) : (
+      <button
+        onClick={() => setShowLogin(true)}
+        className="px-10 py-2.5 bg-red-600 text-black font-black text-[10px] tracking-[0.3em] uppercase shadow-[0_0_25px_rgba(220,38,38,0.3)] hover:bg-red-700 transition-all"
+      >
+        LINK_START
+      </button>
+    )}
+  </div>
+</nav>
       {/* HERO */}
       <section className="relative h-screen flex flex-col justify-center items-center text-center px-4 overflow-hidden z-10">
         <HumanSignature isLoaded={!loading} />
         <motion.p initial={{ opacity: 0 }} animate={!loading ? { opacity: 0.6 } : {}} transition={{ delay: 2.2 }} className="text-[10px] text-red-600 font-bold tracking-[0.8em] uppercase mt-12">Biological Engineering & Discipline</motion.p>
       </section>
+
+      {user && (
+        <section className="py-16 px-6 relative z-20">
+          <div className="max-w-6xl mx-auto bg-zinc-950/80 border border-red-900/30 p-8 md:p-10">
+            <div className="grid md:grid-cols-2 gap-8">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.4em] text-zinc-500 font-mono">Main Dashboard</p>
+                <h3 className="text-4xl font-black italic text-white mt-3 tracking-tighter">Mission Control</h3>
+                <div className="mt-5 space-y-2 text-sm">
+                  <p className="text-zinc-300">Points: <span className="font-black">{rankProfile.points}</span></p>
+                  <p className="text-zinc-300">
+                    Rank: <span className="font-black text-red-500">{getRankDisplay(rankProfile.points)}</span>
+                  </p>
+                </div>
+              </div>
+              <div>
+                <div className="p-5 border border-red-900/30 bg-black/40 rounded-sm shadow-[0_0_25px_rgba(220,38,38,0.15)]">
+                  <p className="text-[10px] uppercase tracking-[0.35em] text-zinc-500 font-mono">Rank Progress</p>
+                  <div className="mt-3 h-2 bg-zinc-900 border border-zinc-800 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progressPercent}%` }}
+                      transition={{ duration: 0.7 }}
+                      className="h-full bg-gradient-to-r from-red-900 via-red-600 to-red-400"
+                    />
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-3 uppercase tracking-widest font-mono">
+                    {rankProfile.nextRank
+                      ? `${rankProfile.nextRank.threshold - rankProfile.points} points to ${rankProfile.nextRank.name}`
+                      : "Maximum rank reached"}
+                  </p>
+                </div>
+                <div className="mt-5 grid sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => navigate("/dailygoals")}
+                    className="px-4 py-3 bg-zinc-900 border border-zinc-800 text-xs uppercase tracking-widest hover:border-red-600 transition"
+                  >
+                    Daily Objectives
+                  </button>
+                  <button
+                    onClick={generateNewPlan}
+                    className="px-4 py-3 bg-red-600 text-black font-black text-xs uppercase tracking-widest hover:bg-red-700 transition"
+                  >
+                    Generate New Plan
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* SYSTEM ARCHITECT */}
       <section className="py-24 flex items-center justify-center relative bg-zinc-950/20 z-10 px-12">
@@ -268,7 +458,7 @@ const Landing = () => {
       <section className="h-screen flex flex-col justify-center items-center text-center px-6 z-10 relative">
         <Trophy size={140} className="text-red-600 mb-12 drop-shadow-[0_0_40px_#dc2626] animate-bounce" />
         <h2 className="text-8xl md:text-[14rem] font-black mb-16 uppercase italic text-white tracking-tighter" style={{ fontFamily: 'Oswald' }}>FORGE A <br/> <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-red-900">BETTER LIFE.</span></h2>
-        <button onClick={() => setShowLogin(true)} className="px-24 py-10 bg-red-600 text-black font-black text-4xl uppercase hover:bg-red-700 transition-all shadow-2xl transform hover:scale-105">Activate Protocol</button>
+        <button onClick={() => setShowLogin(true)} className="px-24 py-10 bg-red-600 text-black font-black text-4xl uppercase hover:bg-red-700 transition-all shadow-2xl transform hover:scale-105">Initialize Ascension</button>
       </section>
 
       <footer className="py-24 text-center opacity-10 border-t border-red-900/10 z-10 relative"><p className="text-[10px] font-bold tracking-[3.5em] uppercase text-red-600">AURA Neural Systems // 2026</p></footer>
