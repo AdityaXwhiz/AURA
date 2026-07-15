@@ -250,9 +250,18 @@ Protocol: ${selectedPlan}
         // force mongoose to detect nested change
         existingUser.markModified("plans");
 
-        await existingUser.save();
+        console.log("BEFORE SAVE");
 
-        console.log("Saved Plans:", existingUser.plans);
+        try {
+          await existingUser.save();
+
+          console.log("SAVE SUCCESS");
+          console.log("Saved Plans:", existingUser.plans);
+        } catch (e) {
+          console.error("SAVE FAILED");
+          console.error(e);
+          throw e;
+        }
       }
     }
 
