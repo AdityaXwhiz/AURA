@@ -78,17 +78,27 @@ const ProtocolPage = () => {
   // Simulated User Data (In production, pull from Context/Backend)
 
   // 🔐 Logged-in user
-  const storedUser = JSON.parse(localStorage.getItem("auraUser"));
+  let storedUser = null;
+
+try {
+  storedUser = JSON.parse(localStorage.getItem("auraUser"));
+} catch {
+  storedUser = null;
+}
   const userId = storedUser?._id || storedUser?.id;
 
 
   // basic user display data
   const userData = {
-    name: storedUser?.name?.toUpperCase() || "USER",
-    goal: storedUser?.onboarding?.goal || "TRANSFORMATION",
-    xp: 750,
-    level: 12
-  };
+  name: storedUser?.name?.toUpperCase() || "USER",
+  goal: storedUser?.onboarding?.goal || "TRANSFORMATION",
+  xp: storedUser?.points || 0,
+  level: Math.max(1, Math.floor((storedUser?.points || 0) / 100) + 1),
+};
+const goToDailyGoals = () => {
+  navigate("/dailygoals");
+};
+
 
 
   useEffect(() => {
@@ -98,14 +108,20 @@ const ProtocolPage = () => {
         if (!token) {
           console.error("No token found");
           setAiLoading(false);
-          setLoadState("active");
+          setLoadState("ready");
           return;
         }
 
         console.log("⚡ Calling AI for plan...");
         console.log("🔥 CALLING AI NOW");
 
-        const res = await fetch("https://aura-backend-nxps.onrender.com/api/ai/plan", {
+        const API_BASE =
+
+  process.env.REACT_APP_API_URL || "http://localhost:5001";
+
+const res = await fetch(
+
+  `${API_BASE}/api/ai/plan`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -125,7 +141,6 @@ const ProtocolPage = () => {
         if (!res.ok) {
           console.error("API ERROR:", res.status);
           setAiLoading(false);
-          setLoadState("active");
           return;
         }
 
@@ -133,19 +148,33 @@ const ProtocolPage = () => {
         console.log("AI RESPONSE:", data);
 
         if (data.plan) {
-          const planData = data.plan.plan ? data.plan.plan : data.plan;
+  const planData = data.plan.plan ? data.plan.plan : data.plan;
 
-          console.log("Normalized Plan:", planData);
+  console.log("Normalized Plan:", planData);
 
-          setAiPlan(planData);
-          setLoadState("active");
-        }
+  try {
+    const verifyRes = await fetch(
+  `${API_BASE}/api/ai/plan`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const savedPlan = await verifyRes.json();
+    console.log("PLAN VERIFIED IN DB:", savedPlan);
+  } catch (err) {
+    console.error("Plan verification failed:", err);
+  }
+
+  setAiPlan(planData);
+}
 
         setAiLoading(false);
       } catch (err) {
         console.log("AI error:", err);
         setAiLoading(false);
-        setLoadState("active");
       }
     };
 
@@ -197,7 +226,16 @@ const ProtocolPage = () => {
             <motion.button
               whileHover={{ scale: 1.05, letterSpacing: "0.1em" }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => setLoadState("active")}
+              onClick={() => {
+  if (!aiPlan) {
+    alert(
+      "Your AURA protocol is still being generated. Please wait."
+    );
+    return;
+  }
+
+  setLoadState("active");
+}}
               className="px-16 py-6 border border-white text-white font-black text-xl uppercase italic hover:bg-white hover:text-black transition-all duration-500"
             >
               Unlock My Protocol <ArrowRight className="inline ml-4" />
@@ -335,11 +373,17 @@ const ProtocolPage = () => {
                      <Trophy size={28} className="text-red-600 -rotate-45" />
                   </div>
                   <div>
-                     <p className="text-red-600 font-mono text-[10px] uppercase tracking-[0.5em] mb-1">Rank: Elite_Sovereign</p>
+                     <p className="text-red-600 font-mono text-[10px] uppercase tracking-[0.5em] mb-1">Rank: LEVEL_{String(userData.level).padStart(2, "0")}</p>
                      <h2 className="text-5xl font-black italic uppercase tracking-tighter">Level {userData.level}</h2>
                   </div>
                </div>
 
+               <button
+                 onClick={goToDailyGoals}
+                 className="px-6 py-3 border border-red-600 text-red-600 font-black uppercase tracking-wider hover:bg-red-600 hover:text-white transition-all"
+               >
+                 Open Daily Goals
+               </button>
                <div className="w-full md:w-96">
                   <div className="flex justify-between text-[10px] uppercase font-bold mb-3 text-zinc-500 font-mono">
                     <span>Transformation XP</span>
@@ -348,7 +392,9 @@ const ProtocolPage = () => {
                   <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
                      <motion.div 
                         initial={{ width: 0 }} 
-                        animate={{ width: "75%" }} 
+                        animate={{
+  width: `${Math.min(((userData.xp % 1000) / 1000) * 100, 100)}%`,
+}}
                         transition={{ duration: 2, ease: "circOut" }}
                         className="h-full bg-gradient-to-r from-red-900 to-red-600 shadow-[0_0_10px_red]" 
                      />
@@ -367,7 +413,9 @@ const ProtocolPage = () => {
                      <div className="grid grid-cols-2 gap-6">
                         <div>
                            <p className="text-[9px] text-zinc-500 uppercase font-bold">Projected Weight</p>
-                           <p className="text-2xl font-black italic">{normalizedPlan?.overview?.targetWeight || "-"}</p>
+                           <p className="text-2xl font-black italic text-red-600">
+                             {normalizedPlan?.overview?.targetWeight || "-"}
+                           </p>
                         </div>
                         <div>
                            <p className="text-[9px] text-zinc-500 uppercase font-bold">Estimated Loss</p>
@@ -397,7 +445,7 @@ const ProtocolPage = () => {
                      <Flame size={18} className="text-orange-600 animate-pulse" />
                   </div>
                   <div className="p-10 space-y-6">
-                    {normalizedPlan?.weeklyWorkout?.slice(0,3).map((day, i) => (
+                    {normalizedPlan?.weeklyWorkout.map((day, i) => (
                       <motion.div 
                         key={i} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }}
                         className="flex items-center gap-10 p-8 bg-black border border-zinc-900 hover:border-red-900/40 transition-all group cursor-pointer"
@@ -411,6 +459,14 @@ const ProtocolPage = () => {
                     ))}
                   </div>
                </div>
+            </div>
+            <div className="flex justify-center mt-16">
+              <button
+                onClick={goToDailyGoals}
+                className="px-10 py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest rounded-lg transition-all"
+              >
+                Deploy To Daily Goals →
+              </button>
             </div>
           </motion.div>
           </>

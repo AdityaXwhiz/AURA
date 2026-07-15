@@ -1,3 +1,4 @@
+import axios from "axios";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -14,14 +15,27 @@ import {
   Utensils,
   Zap,
 } from "lucide-react";
+
+import AnimatedXP from "../components/dailyGoals/AnimatedXP";
+import ConfettiBurst from "../components/dailyGoals/ConfettiBurst";
+import MotivationalToast from "../components/dailyGoals/MotivationalToast";
+import ProgressRing from "../components/dailyGoals/ProgressRing";
+import StreakBadge from "../components/dailyGoals/StreakBadge";
+import TaskCard from "../components/dailyGoals/TaskCard";
 import { getNextRank, getUserRank, getSubTierProgress } from "../utils/rank";
+import { buildDayWisePlan } from "../utils/dayPlanBuilder";
+import {
+  PROGRESS_KEY,
+  STREAK_KEY,
+  readProgress,
+  getStreak,
+  updateStreak,
+} from "../utils/progressUtils";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CONSTANTS & HELPERS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const PROGRESS_KEY = "auraDailyGoalsProgress";
-const STREAK_KEY = "auraDailyStreak";
 
 const MOTIVATIONAL_MESSAGES = [
   "Discipline > Motivation 🔥",
@@ -43,553 +57,7 @@ const MOTIVATIONAL_MESSAGES = [
 
 const XP_PER_TASK = 15;
 
-const toArray = (value) => {
-  if (Array.isArray(value)) return value;
-  if (!value) return [];
-  return [value];
-};
 
-const normalizeDay = (value, index) => {
-  const clean = typeof value === "string" ? value.trim() : "";
-  return clean || `Day ${index + 1}`;
-};
-
-const buildDayWisePlan = (plan) => {
-  if (!plan || typeof plan !== "object") return [];
-
-  const dayMap = new Map();
-  const sharedObjectives = toArray(plan.tips).filter(Boolean);
-
-  toArray(plan.weeklyWorkout).forEach((entry, index) => {
-    const day = normalizeDay(entry?.day, index);
-    const existing = dayMap.get(day) || { day, workouts: [], meals: [], objectives: [] };
-
-    const exercises = toArray(entry?.exercises).map((exercise) => ({
-      name: exercise?.name || "Workout",
-      sets: exercise?.sets || "",
-      reps: exercise?.reps || "",
-      duration: exercise?.duration || "",
-    }));
-
-    if (exercises.length) {
-      existing.workouts.push(...exercises);
-    } else if (entry?.focus) {
-      existing.workouts.push({
-        name: entry.focus,
-        sets: "",
-        reps: "",
-        duration: "",
-      });
-    }
-
-    dayMap.set(day, existing);
-  });
-
-  toArray(plan.diet).forEach((mealDay, index) => {
-    const day = normalizeDay(mealDay?.day, index);
-    const existing = dayMap.get(day) || { day, workouts: [], meals: [], objectives: [] };
-
-    existing.meals = [
-      { label: "Breakfast", value: mealDay?.breakfast },
-      { label: "Lunch", value: mealDay?.lunch },
-      { label: "Dinner", value: mealDay?.dinner },
-      { label: "Snacks", value: mealDay?.snacks },
-    ].filter((meal) => Boolean(meal.value));
-
-    dayMap.set(day, existing);
-  });
-
-  const days = Array.from(dayMap.values());
-  if (!days.length) {
-    return [
-      {
-        day: "Day 1",
-        workouts: [],
-        meals: [],
-        objectives: sharedObjectives,
-      },
-    ];
-  }
-
-  return days.map((dayPlan) => ({
-    ...dayPlan,
-    objectives: sharedObjectives.length ? sharedObjectives : dayPlan.objectives,
-  }));
-};
-
-const readProgress = () => {
-  try {
-    const raw = localStorage.getItem(PROGRESS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-};
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   STREAK HELPER
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-const getStreak = () => {
-  try {
-    const raw = localStorage.getItem(STREAK_KEY);
-    if (!raw) return { count: 0, lastDate: null };
-    return JSON.parse(raw);
-  } catch {
-    return { count: 0, lastDate: null };
-  }
-};
-
-const updateStreak = () => {
-  const today = new Date().toDateString();
-  const streak = getStreak();
-  if (streak.lastDate === today) return streak.count;
-
-  const yesterday = new Date(Date.now() - 86400000).toDateString();
-  const newCount = streak.lastDate === yesterday ? streak.count + 1 : 1;
-  const updated = { count: newCount, lastDate: today };
-  localStorage.setItem(STREAK_KEY, JSON.stringify(updated));
-  return newCount;
-};
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   CONFETTI PARTICLE SYSTEM (Canvas-based, self-contained)
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-const ConfettiBurst = ({ trigger }) => {
-  const canvasRef = useRef(null);
-  const animFrameRef = useRef(null);
-
-  useEffect(() => {
-    if (!trigger || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const colors = [
-      "#ef4444", "#f97316", "#eab308", "#22c55e",
-      "#3b82f6", "#a855f7", "#ec4899", "#ffffff",
-    ];
-
-    const particles = Array.from({ length: 60 }, () => ({
-      x: canvas.width / 2 + (Math.random() - 0.5) * 200,
-      y: canvas.height / 2,
-      vx: (Math.random() - 0.5) * 16,
-      vy: -Math.random() * 18 - 4,
-      size: Math.random() * 6 + 3,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      alpha: 1,
-      rotation: Math.random() * 360,
-      rotSpeed: (Math.random() - 0.5) * 12,
-    }));
-
-    let frame = 0;
-    const maxFrames = 90;
-
-    const animate = () => {
-      if (frame >= maxFrames) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        return;
-      }
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      particles.forEach((p) => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.45;
-        p.alpha -= 0.012;
-        p.rotation += p.rotSpeed;
-
-        if (p.alpha <= 0) return;
-
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate((p.rotation * Math.PI) / 180);
-        ctx.globalAlpha = Math.max(0, p.alpha);
-        ctx.fillStyle = p.color;
-        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
-        ctx.restore();
-      });
-
-      frame++;
-      animFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    animate();
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-  }, [trigger]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
-        pointerEvents: "none",
-        zIndex: 9999,
-      }}
-    />
-  );
-};
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   MOTIVATIONAL TOAST COMPONENT
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-const MotivationalToast = ({ message, xpGained, onDone }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 60, scale: 0.85 }}
-    animate={{ opacity: 1, y: 0, scale: 1 }}
-    exit={{ opacity: 0, y: -30, scale: 0.9 }}
-    transition={{ type: "spring", stiffness: 350, damping: 25 }}
-    style={{
-      position: "fixed",
-      bottom: "2rem",
-      left: "50%",
-      transform: "translateX(-50%)",
-      zIndex: 9998,
-      display: "flex",
-      alignItems: "center",
-      gap: "1rem",
-      padding: "1rem 1.75rem",
-      borderRadius: "16px",
-      border: "1px solid rgba(239, 68, 68, 0.3)",
-      background: "linear-gradient(135deg, rgba(15,15,15,0.95) 0%, rgba(30,10,10,0.95) 100%)",
-      backdropFilter: "blur(20px)",
-      boxShadow: "0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(239,68,68,0.15)",
-      maxWidth: "90vw",
-    }}
-    onAnimationComplete={() => {
-      setTimeout(onDone, 2200);
-    }}
-  >
-    <div
-      style={{
-        width: 40,
-        height: 40,
-        borderRadius: "12px",
-        background: "linear-gradient(135deg, #ef4444, #b91c1c)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-      }}
-    >
-      <Zap size={20} color="#fff" />
-    </div>
-    <div>
-      <p style={{ color: "#fff", fontWeight: 800, fontSize: "0.95rem", margin: 0 }}>{message}</p>
-      {xpGained > 0 && (
-        <p style={{ color: "#f87171", fontSize: "0.75rem", fontWeight: 700, margin: "2px 0 0 0", fontFamily: "monospace" }}>
-          +{xpGained} XP EARNED
-        </p>
-      )}
-    </div>
-  </motion.div>
-);
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ANIMATED XP COUNTER
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-const AnimatedXP = ({ value }) => {
-  const [display, setDisplay] = useState(value);
-  const prevRef = useRef(value);
-
-  useEffect(() => {
-    const from = prevRef.current;
-    const to = value;
-    if (from === to) return;
-
-    const duration = 600;
-    const start = performance.now();
-
-    const step = (now) => {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(from + (to - from) * eased));
-
-      if (progress < 1) {
-        requestAnimationFrame(step);
-      } else {
-        prevRef.current = to;
-      }
-    };
-
-    requestAnimationFrame(step);
-  }, [value]);
-
-  return <>{display.toLocaleString()}</>;
-};
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   CIRCULAR PROGRESS RING
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-const ProgressRing = ({ progress, size = 100, strokeWidth = 8 }) => {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (progress / 100) * circumference;
-
-  return (
-    <div style={{ position: "relative", width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="rgba(63,63,70,0.4)"
-          strokeWidth={strokeWidth}
-        />
-        <motion.circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="url(#progressGradient)"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-        />
-        <defs>
-          <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#b91c1c" />
-            <stop offset="50%" stopColor="#ef4444" />
-            <stop offset="100%" stopColor="#f97316" />
-          </linearGradient>
-        </defs>
-      </svg>
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <span style={{ fontSize: "1.5rem", fontWeight: 900, color: "#fff", fontStyle: "italic" }}>
-          {Math.round(progress)}%
-        </span>
-        <span style={{ fontSize: "0.55rem", color: "#71717a", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.15em" }}>
-          Complete
-        </span>
-      </div>
-    </div>
-  );
-};
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   TASK CARD COMPONENT
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-const TaskCard = ({ title, description, done, icon: Icon, category, onComplete, index }) => (
-  <motion.div
-    layout
-    initial={{ opacity: 0, y: 20, scale: 0.95 }}
-    animate={{ opacity: 1, y: 0, scale: 1 }}
-    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-    transition={{ duration: 0.3, delay: index * 0.05 }}
-    whileHover={!done ? { scale: 1.02, y: -2 } : {}}
-    style={{
-      position: "relative",
-      padding: "1.25rem",
-      borderRadius: "16px",
-      border: done ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(63,63,70,0.4)",
-      background: done
-        ? "linear-gradient(135deg, rgba(22,101,52,0.15) 0%, rgba(5,46,22,0.1) 100%)"
-        : "linear-gradient(135deg, rgba(24,24,27,0.8) 0%, rgba(15,15,15,0.9) 100%)",
-      backdropFilter: "blur(12px)",
-      cursor: done ? "default" : "pointer",
-      overflow: "hidden",
-      transition: "border-color 0.3s, box-shadow 0.3s",
-      boxShadow: done
-        ? "0 0 20px rgba(34,197,94,0.08)"
-        : "0 4px 20px rgba(0,0,0,0.3)",
-    }}
-    onClick={() => !done && onComplete()}
-  >
-    {/* Glow effect on completion */}
-    {done && (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        style={{
-          position: "absolute",
-          top: "-50%",
-          left: "-50%",
-          width: "200%",
-          height: "200%",
-          background: "radial-gradient(circle at center, rgba(34,197,94,0.06) 0%, transparent 60%)",
-          pointerEvents: "none",
-        }}
-      />
-    )}
-
-    <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", position: "relative", zIndex: 1 }}>
-      {/* Category Icon */}
-      <div
-        style={{
-          width: 42,
-          height: 42,
-          borderRadius: "12px",
-          background: done
-            ? "linear-gradient(135deg, #166534, #15803d)"
-            : "linear-gradient(135deg, rgba(63,63,70,0.5), rgba(39,39,42,0.5))",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          border: done ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(63,63,70,0.3)",
-        }}
-      >
-        {Icon && <Icon size={18} color={done ? "#4ade80" : "#a1a1aa"} />}
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p
-          style={{
-            fontSize: "0.6rem",
-            fontFamily: "monospace",
-            textTransform: "uppercase",
-            letterSpacing: "0.25em",
-            color: done ? "#4ade80" : "#ef4444",
-            marginBottom: "4px",
-            fontWeight: 700,
-          }}
-        >
-          {category}
-        </p>
-        <p
-          style={{
-            fontSize: "0.95rem",
-            fontWeight: 800,
-            color: done ? "rgba(255,255,255,0.5)" : "#fff",
-            textDecoration: done ? "line-through" : "none",
-            lineHeight: 1.3,
-          }}
-        >
-          {title}
-        </p>
-        {description && (
-          <p
-            style={{
-              fontSize: "0.8rem",
-              color: done ? "rgba(161,161,170,0.4)" : "#71717a",
-              marginTop: "4px",
-              lineHeight: 1.4,
-            }}
-          >
-            {description}
-          </p>
-        )}
-
-        {/* XP badge */}
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            marginTop: "8px",
-            padding: "3px 10px",
-            borderRadius: "20px",
-            background: done ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.08)",
-            border: done ? "1px solid rgba(34,197,94,0.2)" : "1px solid rgba(239,68,68,0.15)",
-          }}
-        >
-          <Star size={10} color={done ? "#4ade80" : "#f87171"} />
-          <span
-            style={{
-              fontSize: "0.65rem",
-              fontWeight: 700,
-              fontFamily: "monospace",
-              color: done ? "#4ade80" : "#f87171",
-            }}
-          >
-            {done ? "COMPLETED" : `+${XP_PER_TASK} XP`}
-          </span>
-        </div>
-      </div>
-
-      {/* Check Button */}
-      <motion.div
-        whileHover={!done ? { scale: 1.15 } : {}}
-        whileTap={!done ? { scale: 0.9 } : {}}
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          background: done
-            ? "linear-gradient(135deg, #16a34a, #15803d)"
-            : "rgba(39,39,42,0.6)",
-          border: done
-            ? "2px solid #22c55e"
-            : "2px solid rgba(63,63,70,0.5)",
-          boxShadow: done ? "0 0 15px rgba(34,197,94,0.3)" : "none",
-          cursor: done ? "default" : "pointer",
-          transition: "all 0.3s",
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (!done) onComplete();
-        }}
-      >
-        {done ? (
-          <motion.div initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 400, damping: 15 }}>
-            <Check size={18} color="#fff" strokeWidth={3} />
-          </motion.div>
-        ) : (
-          <div style={{ width: 12, height: 12, borderRadius: "50%", border: "2px solid rgba(113,113,122,0.4)" }} />
-        )}
-      </motion.div>
-    </div>
-  </motion.div>
-);
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   STREAK BADGE
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-const StreakBadge = ({ count }) => {
-  if (count < 1) return null;
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.5 }}
-      animate={{ opacity: 1, scale: 1 }}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
-        padding: "6px 14px",
-        borderRadius: "20px",
-        background: "linear-gradient(135deg, rgba(249,115,22,0.15), rgba(234,179,8,0.1))",
-        border: "1px solid rgba(249,115,22,0.3)",
-      }}
-    >
-      <Flame size={14} color="#f97316" />
-      <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#fb923c", fontFamily: "monospace" }}>
-        {count} DAY STREAK
-      </span>
-    </motion.div>
-  );
-};
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
@@ -628,8 +96,66 @@ const DailyGoals = () => {
   const [confettiTrigger, setConfettiTrigger] = useState(0);
   const [toast, setToast] = useState(null);
   const [streak, setStreak] = useState(getStreak().count);
+  const [adaptiveWorkout, setAdaptiveWorkout] = useState(null);
+  const loadAdaptiveWorkout = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
 
+      const res = await axios.get(
+        "http://localhost:5001/api/adaptive/today",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      console.log("Adaptive Workout Response:", res.data);
 
+      if (res.data?.workout) {
+        const workout = res.data.workout;
+
+        if (workout.optimizedWorkout) {
+          setAdaptiveWorkout(workout.optimizedWorkout);
+        }
+        console.log("WORKOUT DATA:", workout);
+        console.log("RECOVERY SCORE:", workout.recovery?.score);
+console.log("RECOVERY LEVEL:", workout.recovery?.level);
+console.log("FULL WORKOUT:", workout);
+
+        setRecoveryData({
+  score: workout.recovery?.score || 0,
+  level: workout.recovery?.level || "Unknown",
+
+  sleep: workout.sleepHours,
+  energy: workout.energyLevel,
+  stress: workout.stressLevel,
+  soreness: workout.soreness,
+  readiness: workout.readiness,
+});
+
+        setAiReason(workout.reason || "");
+        setConstraints(workout.constraints || []);
+      }
+    } catch (err) {
+     if (err.response?.status === 404) {
+  console.log("NO DAILY CHECKIN FOUND");
+  setShowCheckinPrompt(true);
+  return;
+}
+
+      console.error(err);
+      setAdaptiveWorkout(null);
+    }
+  }, []);
+  
+
+  const [recoveryData, setRecoveryData] = useState(null);
+
+  const [constraints, setConstraints] = useState([]);
+
+  const [aiReason, setAiReason] = useState("");
+  const [showCheckinPrompt, setShowCheckinPrompt] = useState(false);
+  
   useEffect(() => {
     const loadPlan = async () => {
       if (!userId) {
@@ -771,6 +297,10 @@ const DailyGoals = () => {
         console.log("EXTRACTED PLAN:", plan);
         const normalized = buildDayWisePlan(plan);
         setDays(normalized);
+        setActiveDayIndex(0);
+        // Base plan is now available, load today's adaptive workout.
+       await loadAdaptiveWorkout();
+
       } catch (_err) {
         setError("Unable to load your daily goals plan right now.");
       } finally {
@@ -779,9 +309,16 @@ const DailyGoals = () => {
     };
 
     loadPlan();
-  }, [type, userId]);
+  }, [type, userId,  loadAdaptiveWorkout]);
 
   const activeDay = days[activeDayIndex] || null;
+
+  const workoutsToRender =
+    adaptiveWorkout?.exercises ||
+    adaptiveWorkout?.workouts ||
+    activeDay?.workouts || [];
+
+ 
 
   const resetDayProgress = async () => {
     if (!activeDay) return;
@@ -827,12 +364,12 @@ const DailyGoals = () => {
 
   /* ── Daily task completion percentage ── */
   const totalTasks = activeDay
-    ? activeDay.workouts.length + activeDay.meals.length + activeDay.objectives.length
+    ? workoutsToRender.length + activeDay.meals.length + activeDay.objectives.length
     : 0;
 
   const completedTasks = activeDay
     ? [
-        ...activeDay.workouts.map((w) => Boolean(taskProgress[String(activeDay.day || "").toLowerCase()]?.[`workout|${w.name}`.toLowerCase()])),
+        ...workoutsToRender.map((w) => Boolean(taskProgress[String(activeDay.day || "").toLowerCase()]?.[`workout|${w.name}`.toLowerCase()])),
         ...activeDay.meals.map((m) => Boolean(taskProgress[String(activeDay.day || "").toLowerCase()]?.[`meal|${m.label}: ${m.value}`.toLowerCase()])),
         ...activeDay.objectives.map((o) => Boolean(taskProgress[String(activeDay.day || "").toLowerCase()]?.[`objective|${o}`.toLowerCase()])),
       ].filter(Boolean).length
@@ -925,6 +462,14 @@ const DailyGoals = () => {
   /* ═══════════════════════════════════════════════════════════════════════
      RENDER
      ═══════════════════════════════════════════════════════════════════════ */
+
+  // Prepare UI variables for Adaptive Banner
+  const recScore = recoveryData?.score != null ? Number(recoveryData.score) : 0;
+  let recRec = "Recovery Day";
+  let recColor = "#ef4444"; // red
+  if (recScore >= 85) { recRec = "Push Hard"; recColor = "#4ade80"; } // green
+  else if (recScore >= 70) { recRec = "Train Normally"; recColor = "#60a5fa"; } // blue
+  else if (recScore >= 50) { recRec = "Moderate Session"; recColor = "#facc15"; } // yellow
 
   return (
     <div
@@ -1153,59 +698,48 @@ const DailyGoals = () => {
           </div>
         ) : (
           <>
-            {/* ── DAY SELECTOR PILLS ── */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "2rem" }}>
-              {days.map((day, idx) => {
-                const isActive = idx === activeDayIndex;
-                const dayTasks =
-                  (day.workouts?.length || 0) + (day.meals?.length || 0) + (day.objectives?.length || 0);
-                const dayDone = dayTasks > 0
-                  ? [
-                      ...day.workouts.map((w) => Boolean(taskProgress[String(day.day || "").toLowerCase()]?.[`workout|${w.name}`.toLowerCase()])),
-                      ...day.meals.map((m) => Boolean(taskProgress[String(day.day || "").toLowerCase()]?.[`meal|${m.label}: ${m.value}`.toLowerCase()])),
-                      ...day.objectives.map((o) => Boolean(taskProgress[String(day.day || "").toLowerCase()]?.[`objective|${o}`.toLowerCase()])),
-                    ].filter(Boolean).length
-                  : 0;
-                const allDone = dayTasks > 0 && dayDone === dayTasks;
+            {/* TODAY'S MISSION */}
 
-                return (
-                  <motion.button
-                    key={day.day}
-                    onClick={() => setActiveDayIndex(idx)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    style={{
-                      padding: "8px 18px",
-                      borderRadius: "12px",
-                      fontSize: "0.7rem",
-                      fontWeight: 800,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.15em",
-                      cursor: "pointer",
-                      border: isActive
-                        ? "1px solid #ef4444"
-                        : allDone
-                        ? "1px solid rgba(34,197,94,0.3)"
-                        : "1px solid rgba(63,63,70,0.3)",
-                      background: isActive
-                        ? "linear-gradient(135deg, #ef4444, #b91c1c)"
-                        : allDone
-                        ? "rgba(22,101,52,0.15)"
-                        : "rgba(24,24,27,0.6)",
-                      color: isActive ? "#000" : allDone ? "#4ade80" : "#a1a1aa",
-                      transition: "all 0.2s",
-                      position: "relative",
-                    }}
-                  >
-                    {day.day}
-                    {allDone && !isActive && (
-                      <span style={{ marginLeft: "6px" }}>✓</span>
-                    )}
-                  </motion.button>
-                );
-              })}
-            </div>
+<div
+  style={{
+    marginBottom: "2rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  }}
+>
+  <div
+    style={{
+      padding: "10px 18px",
+      borderRadius: "14px",
+      border: "1px solid rgba(239,68,68,.3)",
+      background: "rgba(239,68,68,.1)",
+      color: "#ef4444",
+      fontSize: ".75rem",
+      fontWeight: 800,
+      letterSpacing: ".15em",
+      textTransform: "uppercase",
+    }}
+  >
+    Today's Mission
+  </div>
 
+  {adaptiveWorkout && (
+    <div
+      style={{
+        padding: "8px 14px",
+        borderRadius: "12px",
+        background: "rgba(59,130,246,.12)",
+        border: "1px solid rgba(59,130,246,.25)",
+        color: "#60a5fa",
+        fontSize: ".7rem",
+        fontWeight: 700,
+      }}
+    >
+      AI Optimized
+    </div>
+  )}
+</div>
             {activeDay && (
               <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
                 <button
@@ -1239,8 +773,173 @@ const DailyGoals = () => {
                   exit={{ opacity: 0, y: -12 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                 >
+
+                  {/* AI Banner */}
+                  {adaptiveWorkout && (
+                    <div style={{ marginBottom: "2.5rem" }}>
+                      <style dangerouslySetInnerHTML={{ __html: `
+                        .ai-dashboard-grid {
+                          display: grid;
+                          grid-template-columns: 2fr 1fr;
+                          gap: 16px;
+                        }
+                        @media (max-width: 768px) {
+                          .ai-dashboard-grid {
+                            grid-template-columns: 1fr;
+                          }
+                        }
+                      `}} />
+                      
+                      <div className="ai-dashboard-grid">
+                        
+                        {/* Left Card: AURA Adaptive Intelligence Engine */}
+                        <div
+                          style={{
+                            padding: "1.5rem",
+                            borderRadius: "16px",
+                            border: "1px solid rgba(59,130,246,0.2)",
+                            borderTop: "2px solid #3b82f6",
+                            background: "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(0,0,0,0.95))",
+                            backdropFilter: "blur(16px)",
+                            boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 0 20px rgba(59,130,246,0.05)",
+                            position: "relative",
+                            overflow: "hidden",
+                            display: "flex",
+                            flexDirection: "column"
+                          }}
+                        >
+                          <div style={{ position: "absolute", top: "-50px", left: "-50px", width: "100px", height: "100px", background: "rgba(239,68,68,0.2)", filter: "blur(40px)", pointerEvents: "none" }} />
+                          
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem", flexWrap: "wrap", gap: "10px" }}>
+                            <h3 style={{ margin: 0, color: "#fff", fontSize: "1.1rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", display: "flex", alignItems: "center", gap: "8px" }}>
+                              <Zap size={18} color="#3b82f6" /> AURA Adaptive Intelligence Engine
+                            </h3>
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              <span style={{ background: "rgba(59,130,246,0.15)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "4px 10px", borderRadius: "8px", fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                                AI Optimized Workout
+                              </span>
+                              {recoveryData?.level && (
+                                <span style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", padding: "4px 10px", borderRadius: "8px", fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                                  Recovery: {recoveryData.level}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", flexDirection: "column", gap: "12px", flex: 1, justifyContent: "center" }}>
+                            <div style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.05)", padding: "12px", borderRadius: "10px" }}>
+                              <p style={{ margin: 0, fontSize: "0.7rem", color: "#60a5fa", textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.1em", marginBottom: "4px" }}>
+                                AI Decision
+                              </p>
+                              <p style={{ margin: 0, fontSize: "0.85rem", color: "#e2e8f0", lineHeight: 1.5 }}>
+                                Today's workout was dynamically optimized utilizing your Daily Check-In biometrics.
+                              </p>
+                            </div>
+
+                            {aiReason && (
+                              <div style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)", padding: "12px", borderRadius: "10px", borderLeft: "3px solid #ef4444" }}>
+                                <p style={{ margin: 0, fontSize: "0.7rem", color: "#ef4444", textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.1em", marginBottom: "4px" }}>
+                                  Optimization Rationale
+                                </p>
+                                <p style={{ margin: 0, fontSize: "0.85rem", color: "#e2e8f0", lineHeight: 1.5, fontStyle: "italic" }}>
+                                  "{aiReason}"
+                                </p>
+                              </div>
+                            )}
+
+                            {constraints && constraints.length > 0 && (
+                              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginTop: "4px" }}>
+                                <span style={{ fontSize: "0.65rem", color: "#a1a1aa", textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.1em" }}>Constraints Applied:</span>
+                                {constraints.map((c, i) => (
+                                  <span key={i} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#cbd5e1", padding: "2px 8px", borderRadius: "6px", fontSize: "0.7rem", fontWeight: 600 }}>
+                                    {c}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "auto", paddingTop: "8px" }}>
+                              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#3b82f6", boxShadow: "0 0 10px #3b82f6" }} className="animate-pulse" />
+                              <span style={{ fontSize: "0.65rem", color: "#3b82f6", textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.1em" }}>
+                                Adaptive Status: Active
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Card: Recovery Flash Card */}
+                        <div
+                          style={{
+                            padding: "1.5rem",
+                            borderRadius: "16px",
+                            border: `1px solid ${recColor}40`,
+                            background: "linear-gradient(135deg, rgba(15,23,42,0.8), rgba(9,9,11,0.9))",
+                            backdropFilter: "blur(16px)",
+                            boxShadow: `0 8px 32px rgba(0,0,0,0.5), inset 0 0 30px ${recColor}15`,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "flex-start",
+                            textAlign: "center",
+                            position: "relative"
+                          }}
+                        >
+                          <p style={{ margin: 0, fontSize: "0.75rem", color: "#94a3b8", textTransform: "uppercase", fontWeight: 900, letterSpacing: "0.2em", marginBottom: "1.25rem" }}>
+                            AURA Recovery Index
+                          </p>
+
+                          <div style={{ 
+                            width: "110px", height: "110px", borderRadius: "50%", 
+                            border: `4px solid ${recColor}`, 
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            boxShadow: `0 0 25px ${recColor}40, inset 0 0 15px ${recColor}20`,
+                            marginBottom: "1.25rem",
+                            background: "rgba(0,0,0,0.3)",
+                            flexShrink: 0
+                          }}>
+                            <span style={{ fontSize: "3rem", fontWeight: 900, color: "#fff", textShadow: `0 0 10px ${recColor}80`, lineHeight: 1 }}>
+                              {recScore}
+                            </span>
+                          </div>
+
+                          <h4 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 900, color: "#fff", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            {recRec}
+                          </h4>
+                          
+                          {recoveryData?.level && (
+                            <p style={{ margin: "6px 0 0 0", fontSize: "0.75rem", color: recColor, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.1em" }}>
+                              Level: {recoveryData.level}
+                            </p>
+                          )}
+
+                          {/* Recovery Factors Section */}
+                          <div style={{ width: '100%', marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                            <p style={{ margin: 0, fontSize: "0.65rem", color: "#64748b", textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.15em", marginBottom: "1rem", textAlign: "left" }}>
+                              Recovery Factors
+                            </p>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
+                              {[
+                                { label: "Sleep Quality", value: recoveryData?.sleep ? `${recoveryData.sleep} hrs` : "7.5 hrs", color: "#4ade80" },
+                                { label: "Energy Level", value: recoveryData?.energy || "High", color: "#4ade80" },
+                                { label: "Muscle Soreness", value: (recoveryData?.soreness && recoveryData.soreness.length > 0) ? (Array.isArray(recoveryData.soreness) ? recoveryData.soreness.join(', ') : recoveryData.soreness) : "Moderate", color: "#facc15" },
+                                { label: "Stress Level", value: recoveryData?.stress || "Low", color: "#4ade80" },
+                                { label: "Workout Readiness", value: recoveryData?.readiness || "Prime", color: "#4ade80" }
+                              ].map((factor, i) => (
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.03)", padding: "6px 10px", borderRadius: "8px" }}>
+                                  <span style={{ fontSize: "0.7rem", color: "#cbd5e1", fontWeight: 600 }}>{factor.label}</span>
+                                  <span style={{ fontSize: "0.7rem", color: factor.color, fontWeight: 800, textTransform: "uppercase" }}>{factor.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  )}
+
                   {/* Section: Workouts */}
-                  {activeDay.workouts.length > 0 && (
+                  {workoutsToRender.length > 0 && (
                     <div style={{ marginBottom: "2rem" }}>
                       <h3
                         style={{
@@ -1262,18 +961,18 @@ const DailyGoals = () => {
                           color: "#52525b",
                           fontWeight: 600,
                         }}>
-                          {activeDay.workouts.filter((w) => taskProgress[String(activeDay.day || "").toLowerCase()]?.[`workout|${w.name}`.toLowerCase()]).length}/
-                          {activeDay.workouts.length}
+                          {workoutsToRender.filter((w) => taskProgress[String(activeDay.day || "").toLowerCase()]?.[`workout|${w.name}`.toLowerCase()]).length}/
+                          {workoutsToRender.length}
                         </span>
                       </h3>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "12px" }}>
-                        {activeDay.workouts.map((w, idx) => {
+                        {workoutsToRender.map((w, idx) => {
                           const dayKey = String(activeDay.day || "").toLowerCase().trim();
                           const taskKey = `workout|${w.name.toLowerCase().trim()}`;
-                          const done = Boolean(taskProgress[dayKey]?.[taskKey]);
                           const desc = [w.sets && `${w.sets} sets`, w.reps && `${w.reps} reps`, w.duration]
                             .filter(Boolean)
                             .join(" • ") || "Custom session";
+                          const done = Boolean(taskProgress[dayKey]?.[taskKey]);
                           return (
                             <TaskCard
                               key={`${w.name}-${idx}`}
@@ -1393,7 +1092,7 @@ const DailyGoals = () => {
                   )}
 
                   {/* Empty state */}
-                  {activeDay.workouts.length === 0 && activeDay.meals.length === 0 && activeDay.objectives.length === 0 && (
+                  {workoutsToRender.length === 0 && activeDay.meals.length === 0 && activeDay.objectives.length === 0 && (
                     <div
                       style={{
                         padding: "3rem",
@@ -1441,6 +1140,101 @@ const DailyGoals = () => {
             </AnimatePresence>
           </>
         )}
+        <AnimatePresence>
+  {showCheckinPrompt && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        background: "rgba(0,0,0,.85)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: "500px",
+          maxWidth: "90%",
+          background: "#0a0a0a",
+          border: "1px solid rgba(239,68,68,.25)",
+          borderRadius: "24px",
+          padding: "2rem",
+          textAlign: "center",
+        }}
+      >
+        <Zap
+          size={42}
+          color="#ef4444"
+          style={{ marginBottom: "1rem" }}
+        />
+
+        <h2
+          style={{
+            color: "#fff",
+            fontSize: "1.7rem",
+            fontWeight: 800,
+            marginBottom: ".75rem",
+          }}
+        >
+          AURA Daily Optimization
+        </h2>
+
+        <p
+          style={{
+            color: "#a1a1aa",
+            lineHeight: 1.7,
+            marginBottom: "2rem",
+          }}
+        >
+          Today's workout hasn't been optimized yet.
+          Complete a Daily Check-In so AURA can generate
+          an AI-adapted workout.
+        </p>
+
+        <div style={{ display: "flex", gap: "12px" }}>
+          <button
+            onClick={() => navigate("/daily-checkin")}
+            style={{
+              flex: 1,
+              padding: "14px",
+              borderRadius: "14px",
+              border: "none",
+              background:
+                "linear-gradient(135deg,#ef4444,#b91c1c)",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Start Check-In
+          </button>
+
+          <button
+            onClick={() => setShowCheckinPrompt(false)}
+            style={{
+              flex: 1,
+              padding: "14px",
+              borderRadius: "14px",
+              border: "1px solid rgba(255,255,255,.08)",
+              background: "#111",
+              color: "#fff",
+              cursor: "pointer",
+            }}
+          >
+            Not Now
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  )}
+</AnimatePresence>
       </div>
     </div>
   );

@@ -1,4 +1,3 @@
-
 const getUserProfile = async (req, res) => {
   try {
     const userId = req.userId;
@@ -11,19 +10,22 @@ const getUserProfile = async (req, res) => {
     const hasReset = checkWeeklyReset(user);
     if (hasReset) await user.save();
 
+    console.log("DB USER ONBOARDING:", user.onboarding);
+    console.log("DB USER CURRENT PLAN:", !!user.currentPlan);
+    console.log("DB USER ID:", user._id.toString());
+
     return res.json({
+      onboardingCompleted: !!user.currentPlan,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         onboarding: user.onboarding || {},
       },
-      currentPlan: user.currentPlan || null,   // 🔥 THIS FIXES YOUR ISSUE
+      currentPlan: user.currentPlan || null,
       plans: user.plans || {},
       selectedPlan: user.selectedPlan || "aesthetic",
-      points: user.points || 0,
-      rank: getUserRank(user.points || 0),
-      nextRank: getNextRank(user.points || 0),
+      ...buildRankPayload(user),
       taskLedger: user.taskLedger || [],
       objectiveLedger: user.objectiveLedger || [],
     });
@@ -34,6 +36,11 @@ const getUserProfile = async (req, res) => {
 };
 const User = require("../models/User");
 const { getNextRank, getUserRank } = require("../utils/rank");
+const buildRankPayload = (user) => ({
+  points: user.points || 0,
+  rank: getUserRank(user.points || 0),
+  nextRank: getNextRank(user.points || 0),
+});
 
 // 🗓️ WEEK IDENTIFIER (ISO-like simple week index)
 const getWeekId = () => {
@@ -111,9 +118,7 @@ const getUserPlan = async (req, res) => {
       currentPlan: user.currentPlan,
       plans: user.plans,
       selectedPlan: user.selectedPlan || null,
-      points: user.points || 0,
-      rank: getUserRank(user.points || 0),
-      nextRank: getNextRank(user.points || 0),
+      ...buildRankPayload(user),
       objectiveLedger: user.objectiveLedger || [],
       taskLedger: user.taskLedger || [],
     });
@@ -140,9 +145,7 @@ const getUserRankProfile = async (req, res) => {
         email: user.email,
         selectedPlan: user.selectedPlan || "aesthetic",
       },
-      points: user.points || 0,
-      rank: getUserRank(user.points || 0),
-      nextRank: getNextRank(user.points || 0),
+      ...buildRankPayload(user),
       objectiveLedger: user.objectiveLedger || [],
       taskLedger: user.taskLedger || [],
       dailyBonusLedger: user.dailyBonusLedger || [],
@@ -167,7 +170,10 @@ const markObjectiveComplete = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    checkWeeklyReset(user);
+    const hasReset = checkWeeklyReset(user);
+    if (hasReset) {
+      await user.save();
+    }
 
     const weekId = getWeekId();
     const objectiveKey = `${weekId}|${planType}|${day}|objective|${objective}`.toLowerCase();
@@ -199,9 +205,7 @@ const markObjectiveComplete = async (req, res) => {
     return res.json({
       msg: "Objective processed",
       pointsAdded,
-      points: user.points || 0,
-      rank: getUserRank(user.points || 0),
-      nextRank: getNextRank(user.points || 0),
+      ...buildRankPayload(user),
       objectiveLedger: user.objectiveLedger || [],
       dailyBonusLedger: user.dailyBonusLedger || [],
       alreadyCompleted,
@@ -228,7 +232,10 @@ const markTaskComplete = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    checkWeeklyReset(user);
+    const hasReset = checkWeeklyReset(user);
+    if (hasReset) {
+      await user.save();
+    }
 
     const weekId = getWeekId();
     const taskKey = `${weekId}|${planType}|${day}|${safeCategory}|${task}`.toLowerCase();
@@ -248,9 +255,7 @@ const markTaskComplete = async (req, res) => {
       msg: "Task checkpoint processed",
       alreadyCompleted,
       pointsAdded,
-      points: user.points || 0,
-      rank: getUserRank(user.points || 0),
-      nextRank: getNextRank(user.points || 0),
+      ...buildRankPayload(user),
       taskLedger: user.taskLedger || [],
     });
   } catch (err) {

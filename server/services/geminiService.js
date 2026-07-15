@@ -1,4 +1,25 @@
 const axios = require("axios");
+const GEMINI_MODEL = "gemini-2.0-flash";
+const MAX_RETRIES = 2;
+
+const url = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+
+const extractAndParse = (rawText) => {
+  console.debug("RAW AI RESPONSE:", rawText);
+
+  let cleaned = rawText
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+
+  if (!jsonMatch) {
+    throw new Error("No JSON found in AI response");
+  }
+
+  return JSON.parse(jsonMatch[0]);
+};
 
 const generatePlan = async (userData) => {
   const {
@@ -78,28 +99,10 @@ Format:
 }
 `;
 
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-
-  const extractAndParse = (rawText) => {
-    console.log("RAW AI RESPONSE:", rawText);
-
-    let cleaned = rawText
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-
-    if (!jsonMatch) {
-      throw new Error("No JSON found in AI response");
-    }
-
-    return JSON.parse(jsonMatch[0]);
-  };
 
   let lastError;
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const response = await axios.post(url, {
         contents: [{ parts: [{ text: prompt }] }],
@@ -115,10 +118,13 @@ Format:
     } catch (err) {
       console.error(`ATTEMPT ${attempt + 1} FAILED:`, err.message);
       lastError = err;
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
     }
   }
 
-  throw new Error("AI failed twice. Try again.");
+  throw new Error(lastError?.message || "AI failed. Try again.");
 };
 
 module.exports = { generatePlan };

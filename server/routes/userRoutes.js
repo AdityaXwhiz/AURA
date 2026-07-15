@@ -92,7 +92,25 @@ router.get("/profile", auth, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // 🔥 Debug statements
+    console.log("🔥 PROFILE ROUTE HIT");
+    const hasValidPlan = !!(
+      user.currentPlan &&
+      user.currentPlan.weeklyWorkout &&
+      Array.isArray(user.currentPlan.weeklyWorkout) &&
+      user.currentPlan.weeklyWorkout.length > 0
+    );
+
+    console.log({
+      onboardingCompleted: hasValidPlan,
+      activeVersion: user.activeVersion || 1,
+      hasCurrentPlan: !!user.currentPlan,
+      selectedPlan: user.selectedPlan,
+    });
+
     res.json({
+      onboardingCompleted: hasValidPlan,
+      activeVersion: user.activeVersion || 1,
       user: {
         id: user._id,
         name: user.name,

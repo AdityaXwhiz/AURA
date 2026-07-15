@@ -1,105 +1,141 @@
 const bcrypt = require("bcryptjs");
-const User = require("../models/User");
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 const { getNextRank, getUserRank } = require("../utils/rank");
 
 // ==============================
-// 🟢 SIGNUP CONTROLLER
+// Helpers
+// ==============================
+const createUserResponse = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  onboarding: user.onboarding || {},
+  selectedPlan: user.selectedPlan || null,
+  aiPlan: user.aiPlan || null,
+  points: user.points || 0,
+  rank: getUserRank(user.points || 0),
+  nextRank: getNextRank(user.points || 0),
+});
+
+const normalizeCredentials = ({ name, email, password }) => ({
+  name: typeof name === "string" ? name.trim() : name,
+  email: typeof email === "string" ? email.trim().toLowerCase() : email,
+  password,
+});
+
+const generateToken = (id) =>
+  jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: "7d",
+  });
+
+// ==============================
+// SIGNUP
 // ==============================
 const signup = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    let { name, email, password } = normalizeCredentials(req.body);
 
-    // check if user exists
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ error: "User already exists" });
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "All fields are required",
+      });
     }
 
-    // hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: "Password must be at least 6 characters",
+      });
+    }
 
-    // create user
-    const user = new User({
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: "User already exists",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
       name,
       email,
-      password: hashedPassword
+      password: hashedPassword,
     });
 
-    await user.save();
+    const token = generateToken(user._id);
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.json({
-      msg: "Signup successful",
+    return res.status(201).json({
+      success: true,
+      message: "Signup successful",
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        selectedPlan: user.selectedPlan || null,
-        points: user.points || 0,
-        rank: getUserRank(user.points || 0),
-        nextRank: getNextRank(user.points || 0)
-      }
+      user: createUserResponse(user),
     });
-
   } catch (err) {
-    console.log("Signup error:", err.message);
-    res.status(500).json({ error: "Signup failed" });
+    console.error("Signup Error:", err.stack || err);
+
+    return res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+    });
   }
 };
 
 // ==============================
-// 🔵 LOGIN CONTROLLER
+// LOGIN
 // ==============================
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = normalizeCredentials(req.body);
 
-    // find user
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Email and password are required",
+      });
+    }
+
     const user = await User.findOne({ email });
+
     if (!user) {
-      return res.status(400).json({ error: "User not found" });
+      return res.status(401).json({
+        success: false,
+        error: "Invalid email or password",
+      });
     }
 
-    // check password
     const isMatch = await bcrypt.compare(password, user.password);
+
     if (!isMatch) {
-      return res.status(400).json({ error: "Invalid password" });
+      return res.status(401).json({
+        success: false,
+        error: "Invalid email or password",
+      });
     }
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const token = generateToken(user._id);
 
-    res.json({
-      msg: "Login success",
+    return res.json({
+      success: true,
+      message: "Login successful",
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        onboarding: user.onboarding || {},
-        selectedPlan: user.selectedPlan || null,
-        aiPlan: user.aiPlan || null,
-        points: user.points || 0,
-        rank: getUserRank(user.points || 0),
-        nextRank: getNextRank(user.points || 0)
-      }
+      user: createUserResponse(user),
     });
-
   } catch (err) {
-    console.log("Login error:", err.message);
-    res.status(500).json({ error: "Login failed" });
+    console.error("Login Error:", err.stack || err);
+
+    return res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+    });
   }
 };
 
-module.exports = { signup, login };
+module.exports = {
+  signup,
+  login,
+};

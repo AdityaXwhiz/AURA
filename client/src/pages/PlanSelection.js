@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { 
   Shield, Zap, Skull, ChevronRight, 
   Activity, Flame, Crosshair, 
@@ -14,7 +14,7 @@ const ProtocolCard = ({ title, subTitle, icon: Icon, description, aiInsight, out
   return (
     <motion.div 
       whileHover={{ y: -10, scale: 1.02 }}
-      className={`relative bg-zinc-950 border ${isRecommended ? 'border-red-600 shadow-[0_0_40px_-15px_rgba(220,38,38,0.5)]' : 'border-zinc-900'} p-8 overflow-hidden group cursor-pointer transition-all duration-500`}
+      className={`relative bg-zinc-950 border ${isRecommended ? 'border-red-600 shadow-[0_0_40px_-15px_rgba(220,38,38,0.5)]' : 'border-zinc-900'} p-5 md:p-8 overflow-hidden group cursor-pointer transition-all duration-500`}
       onClick={() => navigate(route)}
     >
       {isRecommended && (
@@ -33,7 +33,7 @@ const ProtocolCard = ({ title, subTitle, icon: Icon, description, aiInsight, out
             <Icon className={isRecommended ? 'text-red-600 animate-pulse' : 'text-zinc-500'} size={28} />
           </div>
           <div>
-            <h3 className="text-3xl font-black text-white uppercase italic leading-none tracking-tighter">{title}</h3>
+            <h3 className="text-2xl md:text-3xl font-black text-white uppercase italic leading-none tracking-tighter">{title}</h3>
             <p className="text-[11px] text-zinc-500 uppercase tracking-[0.3em] mt-2 font-mono">{subTitle}</p>
           </div>
         </div>
@@ -85,17 +85,26 @@ const ProtocolCard = ({ title, subTitle, icon: Icon, description, aiInsight, out
 };
 
 const PlanSelection = () => {
-  const location = useLocation();
   const navigate = useNavigate();
+
+  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5001";
   
   const [userData, setUserData] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
 
   React.useEffect(() => {
     const fetchUser = async () => {
+      setLoading(true);
+      setError("");
       try {
         const token = localStorage.getItem("token");
+        if (!token) {
+          navigate("/");
+          return;
+        }
 
-        const res = await fetch("https://aura-backend-nxps.onrender.com/api/user/profile", {
+        const res = await fetch(`${API_BASE}/api/user/profile`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -117,27 +126,50 @@ const PlanSelection = () => {
 
       } catch (err) {
         console.error("Failed to load user:", err);
+        setError("Unable to load your profile.");
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchUser();
-  }, []);
+  }, [navigate, API_BASE]);
 
-  if (!userData) {
-    return <div className="text-white p-10">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center text-red-600 font-black tracking-widest uppercase">
+        Loading Mission Profile...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center text-center px-6">
+        <div>
+          <p className="text-red-600 text-2xl font-black">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-6 px-6 py-3 bg-red-600 text-black font-bold"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // REAL XP FROM BACKEND
   const userXP = userData.xp ?? 0;
   const nextLevelXP = 1000; // you can later make this dynamic
-  const progressPercent = (userXP / nextLevelXP) * 100;
+  const progressPercent = Math.min(100, Math.max(0, (userXP / nextLevelXP) * 100));
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-red-600 relative overflow-hidden font-sans">
       {/* Dynamic Grid Background */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#ef444405_1px,transparent_1px),linear-gradient(to_bottom,#ef444405_1px,transparent_1px)] bg-[size:40px_40px]" />
 
-      <div className="max-w-7xl mx-auto px-6 pt-32 pb-24 relative z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-24 md:pt-32 pb-24 relative z-10">
         
         {/* PERSISTENT DOSSIER HEADER & XP SYSTEM */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 mb-20 border-b border-zinc-900 pb-12">
@@ -152,7 +184,7 @@ const PlanSelection = () => {
                 </div>
               </div>
               <div>
-                <h1 className="text-5xl font-black italic uppercase tracking-tighter leading-none mb-2">{userData.name}</h1>
+                <h1 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter leading-none mb-2">{userData.name}</h1>
                 <div className="flex items-center gap-3">
                   <div className="flex gap-1">
                     {[...Array(5)].map((_, i) => (
@@ -210,7 +242,7 @@ const PlanSelection = () => {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <ProtocolCard 
             title="30-Day Shred"
             subTitle="Operational: Velocity"
@@ -223,7 +255,7 @@ const PlanSelection = () => {
               { label: "Body Fat %", value: "Down 3.2%" }
             ]}
             stats={{ minLevel: "01" }}
-            route="/dailygoals/shred"
+            route="/protocol/shred"
           />
 
           <ProtocolCard 
@@ -239,7 +271,7 @@ const PlanSelection = () => {
               { label: "Physique Rating", value: "+40% Boost" }
             ]}
             stats={{ minLevel: "01" }}
-            route="/dailygoals/aesthetic"
+            route="/protocol/aesthetic"
           />
 
           <ProtocolCard 
@@ -254,7 +286,7 @@ const PlanSelection = () => {
               { label: "Metabolic Age", value: "-4 Years" }
             ]}
             stats={{ minLevel: "05" }} // Locked based on XP level
-            route="/dailygoals/elite"
+            route="/protocol/elite"
           />
         </div>
       </div>

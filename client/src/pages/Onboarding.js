@@ -76,15 +76,33 @@ const SaturatedBackground = () => (
 );
 
 const Onboarding = () => {
+  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5001";
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [userData, setUserData] = useState({ name: "", weight: "", age: "" });
+  const [userData, setUserData] = useState({
+    name: "",
+    age: "",
+    gender: "",
+    height: "",
+    weight: "",
+    goal: "",
+    experience: "",
+    diet: "",
+    target_weight: "",
+    commitment: "",
+    daily_role: "",
+    train_time: "",
+    train_access: ""
+  });
   const [psychReport, setPsychReport] = useState("");
   const [currentSection, setCurrentSection] = useState("");
+  const [checkingStatus, setCheckingStatus] = useState(true);
+  const [alreadyOnboarded, setAlreadyOnboarded] = useState(false);
+  const [profile, setProfile] = useState(null);
   const chatEndRef = useRef(null);
 
   const chatFlow = useMemo(() => [
@@ -104,6 +122,52 @@ const Onboarding = () => {
   ], []);
 
   useEffect(() => {
+    // Check onboarding status before chat flow starts
+    const checkOnboardingStatus = async () => {
+  try {
+    const token = localStorage.getItem("token");
+
+    console.log("TOKEN:", token);
+
+    if (!token) {
+      console.log("No token found");
+      setCheckingStatus(false);
+      return;
+    }
+
+    const res = await fetch(`${API_BASE}/api/user/profile`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log("STATUS:", res.status);
+
+    const data = await res.json();
+
+    console.log("PROFILE RESPONSE:", data);
+
+    if (data?.user) {
+      setProfile(data.user);
+    }
+
+    if (data?.onboardingCompleted) {
+      console.log("Already onboarded");
+      setAlreadyOnboarded(true);
+    } else {
+      console.log("Not onboarded");
+    }
+  } catch (err) {
+    console.error("Onboarding check failed:", err);
+  } finally {
+    setCheckingStatus(false);
+  }
+};
+    checkOnboardingStatus();
+  }, [API_BASE]);
+
+  useEffect(() => {
+    if (checkingStatus || alreadyOnboarded) return;
     if (step < chatFlow.length) {
       if (chatFlow[step].section !== currentSection) {
         setCurrentSection(chatFlow[step].section);
@@ -117,21 +181,18 @@ const Onboarding = () => {
     } else {
       initiateBiometricScan();
     }
-  }, [step, chatFlow]);
+  }, [step, chatFlow, checkingStatus, alreadyOnboarded, currentSection]);
 const initiateBiometricScan = async () => {
   setIsScanning(true);
-
   try {
-    const storedUser = JSON.parse(localStorage.getItem("auraUser"));
-
-    if (!storedUser) {
-      alert("No logged in user found");
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("No authentication token found. Please log in again.");
+      setIsScanning(false);
+      navigate("/");
       return;
     }
-
-    const token = localStorage.getItem("token");
-
-    const res = await fetch("https://aura-backend-nxps.onrender.com/api/user/onboarding", {
+    const res = await fetch(`${API_BASE}/api/user/onboarding`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -141,41 +202,137 @@ const initiateBiometricScan = async () => {
         onboarding: userData
       })
     });
-
     const data = await res.json();
-
     if (!res.ok) {
-      console.log(data);
+      console.error(data);
       alert("Failed to save onboarding");
       setIsScanning(false);
       return;
     }
-
     setTimeout(() => {
       setIsScanning(false);
       navigate('/planselection');
     }, 2000);
-
   } catch (err) {
-    console.log(err);
+    setIsScanning(false);
+    console.error(err);
     alert("Failed to save onboarding");
   }
 };
 
   const handleUserAnswer = (answer) => {
-    if (!answer.toString().trim()) return;
+    const val = answer.toString().trim();
+    const id = chatFlow[step]?.id;
+    if (!val) {
+      alert("Please enter a value to proceed.");
+      return;
+    }
+    // Validation per field
+    if (id === "age") {
+      const n = Number(val);
+      if (!/^\d+$/.test(val) || n < 10 || n > 100) {
+        alert("Please enter a valid age between 10 and 100.");
+        return;
+      }
+    }
+    if (id === "height") {
+      const n = Number(val);
+      if (!/^\d+$/.test(val) || n < 80 || n > 250) {
+        alert("Please enter a valid height between 80 and 250 cm.");
+        return;
+      }
+    }
+    if (id === "weight" || id === "target_weight") {
+      const n = Number(val);
+      if (!/^\d+(\.\d+)?$/.test(val) || n < 20 || n > 400) {
+        alert("Please enter a valid weight between 20 and 400 kg.");
+        return;
+      }
+    }
     setMessages(prev => [...prev, { sender: "user", text: answer }]);
-    setUserData(prev => ({ ...prev, [chatFlow[step].id]: answer }));
-    
-    if (chatFlow[step].id === "name") setPsychReport(`Neural link established for subject: ${answer}.`);
-    if (chatFlow[step].id === "goal") setPsychReport(`Objective set to ${answer}. Calculating optimal path...`);
-    
+    setUserData(prev => ({ ...prev, [id]: answer }));
+    if (id === "name") setPsychReport(`Neural link established for subject: ${answer}.`);
+    if (id === "goal") setPsychReport(`Objective set to ${answer}. Calculating optimal path...`);
     setInputValue("");
     setStep(prev => prev + 1);
   };
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isTyping]);
 
+  // Early returns for onboarding status
+  if (checkingStatus) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center text-white text-xl">
+        Checking onboarding status...
+      </div>
+    );
+  }
+  if (alreadyOnboarded) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full bg-zinc-950/90 border border-red-900/30 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="border-b border-red-900/20 p-8 text-center">
+            <div className="flex justify-center mb-5">
+              <div className="w-20 h-20 rounded-full border border-red-600/30 flex items-center justify-center bg-red-950/20">
+                <ShieldCheck className="text-red-600" size={38} />
+              </div>
+            </div>
+
+            <p className="text-[11px] tracking-[0.5em] uppercase text-red-600 mb-2">
+              Neural Authentication
+            </p>
+
+            <h1 className="text-3xl md:text-4xl font-black text-white uppercase tracking-wide">
+              Identity Verified
+            </h1>
+          </div>
+
+          <div className="p-8 space-y-8">
+            <p className="text-zinc-400 text-center leading-8">
+              Your biometric profile has already been registered and synchronized with Aura.
+              Future fitness strategy changes will be managed through the Adaptive Center.
+            </p>
+
+            <div className="grid grid-cols-2 gap-5">
+              <div className="border border-red-900/20 rounded-xl p-5 bg-black/30">
+                <p className="text-[10px] uppercase tracking-[0.35em] text-zinc-500 mb-2">
+                  Current Strategy
+                </p>
+                <p className="text-xl font-bold text-white">
+                  {profile?.onboarding?.goal || 'Unknown Strategy'}
+                </p>
+              </div>
+
+              <div className="border border-red-900/20 rounded-xl p-5 bg-black/30">
+                <p className="text-[10px] uppercase tracking-[0.35em] text-zinc-500 mb-2">
+                  Active Version
+                </p>
+                <p className="text-xl font-bold text-red-500">
+                  Version {profile?.activeVersion || 1}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-red-900/20 pt-8 flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={() => navigate('/adaptive-center')}
+                className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold transition-all"
+              >
+                Open Adaptive Center
+              </button>
+
+              <button
+                onClick={() => navigate('/')}
+                className="px-8 py-3 border border-red-900/30 hover:border-red-600 text-zinc-300 rounded-xl font-semibold transition-all"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-black text-zinc-400 font-sans selection:bg-red-600 relative overflow-hidden">
       <SaturatedBackground />
@@ -187,7 +344,7 @@ const initiateBiometricScan = async () => {
         <div className="flex gap-4 opacity-30 text-red-600"><Terminal size={18} /><ShieldCheck size={18} /></div>
       </nav>
 
-      <div className="max-w-4xl mx-auto pt-36 flex flex-col h-[90vh] relative z-10 px-6">
+      <div className="max-w-4xl mx-auto pt-28 md:pt-36 flex flex-col h-[calc(100vh-5rem)] md:h-[90vh] relative z-10 px-4 sm:px-6">
         
         {isScanning ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center">
@@ -282,7 +439,7 @@ const initiateBiometricScan = async () => {
             <div className="flex-1 overflow-y-auto space-y-12 pr-2 custom-scrollbar pb-32">
               {messages.map((msg, i) => (
                 <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex ${msg.sender === 'ai' ? 'justify-start' : 'justify-end'}`}>
-                  <div className={`p-8 shadow-2xl ${msg.sender === 'ai' ? 'bg-red-950/20 border-l-8 border-red-600 clip-ai text-white uppercase font-black tracking-tighter' : 'bg-zinc-900 border-r-8 border-red-600 clip-user text-white italic font-serif'}`}>
+                  <div className={`p-5 md:p-8 shadow-2xl max-w-[90%] md:max-w-[75%] break-words ${msg.sender === 'ai' ? 'bg-red-950/20 border-l-8 border-red-600 clip-ai text-white uppercase font-black tracking-tighter' : 'bg-zinc-900 border-r-8 border-red-600 clip-user text-white italic font-serif'}`}>
                      {msg.text}
                   </div>
                 </motion.div>
@@ -296,7 +453,7 @@ const initiateBiometricScan = async () => {
                     </div>
                   ) : (
                     <div className="relative group">
-                      <input autoFocus value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleUserAnswer(inputValue)} placeholder="Enter Command..." className="w-full bg-transparent border-b-2 border-red-900/30 p-4 text-white text-3xl focus:outline-none focus:border-red-600 transition-all italic font-bold" style={{ fontFamily: "'Playfair Display', serif" }} />
+                      <input autoFocus value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleUserAnswer(inputValue)} placeholder="Enter Command..." className="w-full bg-transparent border-b-2 border-red-900/30 p-4 text-white text-xl md:text-3xl focus:outline-none focus:border-red-600 transition-all italic font-bold" style={{ fontFamily: "'Playfair Display', serif" }} />
                       <Send size={28} onClick={() => handleUserAnswer(inputValue)} className="absolute right-4 top-1/2 -translate-y-1/2 text-red-900 cursor-pointer" />
                     </div>
                   )}

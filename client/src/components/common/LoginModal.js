@@ -2,28 +2,37 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom"; // Import for navigation
 import { X, ShieldCheck, Terminal, Zap } from "lucide-react";
+import useAuth from "../../hooks/useAuth";
 
 function LoginModal({ close }) {
   const navigate = useNavigate(); // Initialize navigation
+  const { login } = useAuth();
 
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5001";
 
   const handleInitiateLink = async (e) => {
     e.preventDefault();
+    if (loading) return;
+    setLoading(true);
 
     try {
       const url =
         mode === "signup"
-          ? "https://aura-backend-nxps.onrender.com/api/auth/signup"
-          : "https://aura-backend-nxps.onrender.com/api/auth/login";
+          ? `${API_BASE}/api/auth/signup`
+          : `${API_BASE}/api/auth/login`;
+
+      const normalizedEmail = email.trim().toLowerCase();
 
       const body =
         mode === "signup"
-          ? { name, email, password }
-          : { email, password };
+          ? { name, email: normalizedEmail, password }
+          : { email: normalizedEmail, password };
 
       const res = await fetch(url, {
         method: "POST",
@@ -38,21 +47,17 @@ function LoginModal({ close }) {
         return;
       }
 
-      // store auth properly
-      if (data.token) {
-        localStorage.setItem("token", data.token);
+      if (data.token && data.user) {
+        login(data.user, data.token);
       }
 
-      if (data.user) {
-        localStorage.setItem("auraUser", JSON.stringify(data.user));
-      }
-
-      // redirect after login/signup
-      navigate("/onboarding");
+      close();
+      navigate("/d");
 
     } catch (err) {
-      console.log(err);
-      alert("Server error");
+      alert(err.message || "Unable to connect to the server. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -126,6 +131,7 @@ function LoginModal({ close }) {
                 onChange={(e)=>setName(e.target.value)}
                 placeholder="Enter your name"
                 className="w-full p-4 bg-black border border-red-900/20 text-white"
+                autoComplete="name"
               />
             </div>
           )}
@@ -141,6 +147,7 @@ function LoginModal({ close }) {
               onChange={(e)=>setEmail(e.target.value)}
               placeholder="Enter email"
               className="w-full p-4 bg-black border border-red-900/20 text-white rounded-none focus:border-red-600 focus:outline-none"
+              autoComplete="email"
             />
           </div>
 
@@ -155,15 +162,17 @@ function LoginModal({ close }) {
               onChange={(e)=>setPassword(e.target.value)}
               placeholder="Password"
               className="w-full p-4 bg-black border border-red-900/20 text-white rounded-none focus:border-red-600 focus:outline-none"
+              autoComplete="current-password"
             />
           </div>
 
           <div className="pt-4">
             <button 
               type="submit"
-              className="group relative w-full bg-red-600 hover:bg-red-700 text-black py-4 rounded-none font-black uppercase tracking-[0.4em] text-xs transition-all duration-300 overflow-hidden"
+              disabled={loading}
+              className="group relative w-full bg-red-600 hover:bg-red-700 text-black py-4 rounded-none font-black uppercase tracking-[0.4em] text-xs transition-all duration-300 overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <span className="relative z-10">Initiate Link</span>
+              <span className="relative z-10">{loading ? "Establishing Link..." : "Initiate Link"}</span>
               <motion.div 
                 className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"
               />

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
+const { Schema } = mongoose;
 
-const userSchema = new mongoose.Schema({
+const userSchema = new Schema({
   // 🔐 AUTH
   name: {
     type: String,
@@ -12,7 +13,8 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    index: true
   },
   password: {
     type: String,
@@ -35,19 +37,72 @@ const userSchema = new mongoose.Schema({
   },
 
   // 🎯 CURRENT SELECTED PLAN
-  selectedPlan: String,
+  selectedPlan: {
+    type: String,
+    enum: ["shred", "aesthetic", "elite"],
+    default: "aesthetic"
+  },
 
   // 🤖 AI GENERATED PLANS (saved forever per user)
   plans: {
-    shred: { type: Object, default: {} },
-    aesthetic: { type: Object, default: {} },
-    elite: { type: Object, default: {} }
+    shred: { type: Schema.Types.Mixed, default: {} },
+    aesthetic: { type: Schema.Types.Mixed, default: {} },
+    elite: { type: Schema.Types.Mixed, default: {} }
   },
 
   // 🔥 CURRENT ACTIVE PLAN (easy access in frontend)
   currentPlan: {
-    type: Object,
+    type: Schema.Types.Mixed,
     default: {}
+  },
+
+  // 🧠 ADAPTIVE PLAN VERSIONING
+  activeVersion: {
+    type: Number,
+    default: 1
+  },
+
+  planVersions: {
+    type: [
+      {
+        version: {
+          type: Number,
+          required: true
+        },
+
+        goal: {
+          type: String,
+          default: ""
+        },
+
+        protocol: {
+          type: String,
+          default: ""
+        },
+
+        aiReason: {
+          type: String,
+          default: ""
+        },
+
+        status: {
+          type: String,
+          enum: ["active", "archived"],
+          default: "active"
+        },
+
+        createdAt: {
+          type: Date,
+          default: Date.now
+        },
+
+        plan: {
+          type: Schema.Types.Mixed,
+          default: {}
+        }
+      }
+    ],
+    default: []
   },
 
   // 🎮 GAMIFICATION
@@ -90,5 +145,7 @@ const userSchema = new mongoose.Schema({
     index: true
   }
 });
+
+userSchema.set("versionKey", false);
 
 module.exports = mongoose.model("User", userSchema);
