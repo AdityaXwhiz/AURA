@@ -87,7 +87,7 @@ const ProtocolCard = ({ title, subTitle, icon: Icon, description, aiInsight, out
 const PlanSelection = () => {
   const navigate = useNavigate();
 
-  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5001";
+  const API_BASE = process.env.REACT_APP_API_URL || "https://aura-backend-nxps.onrender.com";
   
   const [userData, setUserData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);

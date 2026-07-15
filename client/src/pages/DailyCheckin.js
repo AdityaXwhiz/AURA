@@ -93,7 +93,7 @@ function DailyCheckin() {
     const checkTodayWorkout = async () => {
       try {
         const token = localStorage.getItem('token');
-        await axios.get('http://localhost:5001/api/adaptive/today', {
+        await axios.get('https://aura-backend-nxps.onrender.com/api/adaptive/today', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -145,7 +145,7 @@ function DailyCheckin() {
     const token = localStorage.getItem('token');
     try {
       await axios.post(
-        'http://localhost:5001/api/adaptive/checkin',
+        'https://aura-backend-nxps.onrender.com/api/adaptive/checkin',
         {
           sleepHours: Number(form.sleepHours),
           energyLevel: Number(form.energyLevel),

@@ -14,7 +14,7 @@ function LoginModal({ close }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5001";
+  const API_BASE = process.env.REACT_APP_API_URL || "https://aura-backend-nxps.onrender.com";
 
   const handleInitiateLink = async (e) => {
     e.preventDefault();

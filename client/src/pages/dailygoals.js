@@ -102,7 +102,7 @@ const DailyGoals = () => {
       const token = localStorage.getItem("token");
 
       const res = await axios.get(
-        "http://localhost:5001/api/adaptive/today",
+        "https://aura-backend-nxps.onrender.com/api/adaptive/today",
         {
           headers: {
             Authorization: `Bearer ${token}`,
